@@ -524,3 +524,72 @@ def get_recent_audit_events(limit: int = 100) -> list:
     rows = [dict(r) for r in c.fetchall()]
     conn.close()
     return rows
+
+
+# ── Seed Data ─────────────────────────────────────────────────
+
+def seed_leads_from_csv():
+    """Import leads from CSV seed file if database is empty."""
+    import csv
+    import os
+    from pathlib import Path
+
+    # Check if leads already exist
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM leads")
+    count = c.fetchone()[0]
+
+    if count > 0:
+        logger.info(f"Database has {count} leads, skipping seed")
+        conn.close()
+        return
+
+    # Find CSV file
+    csv_path = Path(__file__).parent.parent / "data" / "leads_seed.csv"
+    if not csv_path.exists():
+        logger.info("No seed CSV found, skipping")
+        conn.close()
+        return
+
+    # Import leads
+    with open(csv_path, 'r', newline='', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        leads = list(reader)
+
+    logger.info(f"Seeding {len(leads)} leads from CSV...")
+
+    for lead in leads:
+        # Convert empty strings to None
+        for key in lead:
+            if lead[key] == '':
+                lead[key] = None
+
+        c.execute("""
+            INSERT INTO leads (
+                id, business_name, category, city, address, phone, website,
+                google_maps_url, rating, review_count, has_website, site_status,
+                site_last_updated, owner_name, owner_email, email_source, lead_score,
+                outreach_status, email_sent_at, sms_sent_at, last_reply_at,
+                reply_intent, scraped_at, updated_at, notes, call_status, call_sid,
+                call_transcript, call_summary, call_duration, call_attempts, last_call_at
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
+        """, (
+            lead.get('id'), lead.get('business_name'), lead.get('category'),
+            lead.get('city'), lead.get('address'), lead.get('phone'),
+            lead.get('website'), lead.get('google_maps_url'), lead.get('rating'),
+            lead.get('review_count'), lead.get('has_website'), lead.get('site_status'),
+            lead.get('site_last_updated'), lead.get('owner_name'), lead.get('owner_email'),
+            lead.get('email_source'), lead.get('lead_score'), lead.get('outreach_status'),
+            lead.get('email_sent_at'), lead.get('sms_sent_at'), lead.get('last_reply_at'),
+            lead.get('reply_intent'), lead.get('scraped_at'), lead.get('updated_at'),
+            lead.get('notes'), lead.get('call_status'), lead.get('call_sid'),
+            lead.get('call_transcript'), lead.get('call_summary'), lead.get('call_duration'),
+            lead.get('call_attempts'), lead.get('last_call_at')
+        ))
+
+    conn.commit()
+    conn.close()
+    logger.info(f"Successfully seeded {len(leads)} leads")

@@ -90,8 +90,9 @@ DB_PATH = Path(os.environ.get("DATABASE_PATH", Path(__file__).parent / "data" / 
 (DB_PATH.parent if isinstance(DB_PATH, Path) else Path(DB_PATH).parent).mkdir(parents=True, exist_ok=True)
 
 # Initialize all tables
-from modules.database import init_db
+from modules.database import init_db, seed_leads_from_csv
 init_db()  # Core tables (admin_sessions, leads, etc.)
+seed_leads_from_csv()  # Import leads from CSV if database is empty
 init_loyalty_tables()
 init_auth_tables()
 init_review_tables()
