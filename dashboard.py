@@ -410,22 +410,28 @@ def get_nav(page='overview'):
 
 @app.route("/login", methods=["GET","POST"])
 def login():
-    """Admin login with password."""
+    """Admin login with email + password."""
     error = ""
     if request.method == "POST":
-        if request.form.get("password") == DASHBOARD_PASS:
-            # Password correct - redirect to 2FA
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        admin_email = os.environ.get("ADMIN_EMAIL", "joel@pineydigital.com").lower()
+
+        # Validate email first
+        if email != admin_email:
+            error = "Invalid credentials."
+        elif password != DASHBOARD_PASS:
+            error = "Invalid credentials."
+        else:
+            # Credentials correct - redirect to 2FA
             from modules.auth_security import generate_2fa_code
             from modules.email_sender import send_2fa_code, is_email_configured
-            import os
 
             code = generate_2fa_code("admin")
             session["pending_login"] = True
 
-            # Try to send email
+            # Send 2FA email
             email_sent = False
-            admin_email = os.environ.get("ADMIN_EMAIL", "joel@pineydigital.com")
-
             if is_email_configured():
                 success, msg = send_2fa_code(admin_email, code)
                 email_sent = success
@@ -433,28 +439,27 @@ def login():
                     logger.info(f"Admin 2FA code sent to {admin_email}")
                 else:
                     logger.warning(f"Failed to send 2FA email: {msg}")
-                    # Show code on screen if email fails
-                    session["2fa_dev_code"] = code
 
             # Store code in session
             session["2fa_code"] = code
             session["2fa_email_sent"] = email_sent
 
             return redirect(url_for("login_2fa"))
-        error = "Incorrect password."
+
     return render_template_string(f"""<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Piney Digital — Login</title>{BASE_CSS}</head><body>
+<title>Piney Digital — Admin Login</title>{BASE_CSS}</head><body>
 <div class="login-wrap">
   <div class="login-card">
     <h1>🌲 Piney Digital</h1>
     <p>Admin Dashboard</p>
     {f'<p style="color:#ef4444;margin-bottom:16px">{error}</p>' if error else ''}
     <form method="POST">
-      <input type="password" name="password" placeholder="Enter password" autofocus>
+      <input type="email" name="email" placeholder="Admin email" required autofocus
+             value="{request.form.get('email', '')}">
+      <input type="password" name="password" placeholder="Password" required>
       <button type="submit">Sign in</button>
     </form>
-    {f'<p class="err">{error}</p>' if error else ''}
   </div>
 </div></body></html>""")
 
@@ -485,7 +490,7 @@ def login_2fa():
             code_from_session = generate_2fa_code("admin")
             session["2fa_code"] = code_from_session
 
-            # Try to send email
+            # Send email
             if is_email_configured():
                 success, msg = send_2fa_code(os.environ.get("ADMIN_EMAIL", ADMIN_EMAIL), code_from_session)
                 email_sent = success
@@ -495,7 +500,7 @@ def login_2fa():
                 else:
                     error = f"Failed to send email: {msg}"
             else:
-                error = "New code generated (check below)"
+                error = "Email not configured. Please contact support."
 
         elif action == "verify":
             valid, msg = verify_2fa_code("admin", code)
@@ -522,9 +527,12 @@ def login_2fa():
             else:
                 error = msg
 
-    # Show email message or dev code
+    # Show email message
     admin_email = os.environ.get("ADMIN_EMAIL", "joel@pineydigital.com")
-    show_dev_code = not is_email_configured() or not email_sent
+
+    # If email failed and no code configured, show error
+    if not email_sent and not is_email_configured():
+        error = "Email not configured. Please contact support."
 
     return render_template_string(f"""<!DOCTYPE html><html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
@@ -538,24 +546,16 @@ def login_2fa():
 .email-sent .icon{{font-size:48px;margin-bottom:12px}}
 .email-sent .msg{{color:#94a3b8;font-size:14px}}
 .email-sent .email{{color:#22c55e;font-weight:600}}
-.dev-code{{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:16px;margin-bottom:20px;font-family:monospace}}
-.dev-code .label{{color:#f59e0b;font-size:11px;margin-bottom:8px}}
-.dev-code .code{{color:#22c55e;font-size:28px;letter-spacing:4px}}
 </style></head><body>
 <div class="login-wrap">
   <div class="login-card">
-    <h1>🔐 Two-Factor Authentication</h1>
+    <h1>Two-Factor Authentication</h1>
 
-    {f'''<div class="email-sent">
-      <div class="icon">📧</div>
+    <div class="email-sent">
+      <div class="icon">Email</div>
       <div class="msg">A verification code was sent to</div>
       <div class="email">{admin_email}</div>
-    </div>''' if email_sent and not show_dev_code else ''}
-
-    {f'''<div class="dev-code">
-      <div class="label">⚠️ Development Mode - SMTP not configured</div>
-      <div class="code">{code_from_session}</div>
-    </div>''' if show_dev_code else ''}
+    </div>
 
     {f'<p class="err">{error}</p>' if error else ''}
 
@@ -3548,7 +3548,146 @@ def logout():
     return redirect(url_for("login"))
 
 
+@app.route("/admin/seed-test-data")
+@login_required
+def seed_test_data():
+    """Seed test businesses and customers for development/demo."""
+    from modules.loyalty_db import create_loyalty_business, create_customer, get_all_loyalty_businesses
+    from modules.referrals_db import get_or_create_referral_code
+
+    # Check if already seeded
+    existing = get_all_loyalty_businesses()
+    if len(existing) >= 3:
+        return render_template_string(f"""<!DOCTYPE html><html><head>
+<title>Seed Data — Piney Digital</title>{BASE_CSS}</head><body>
+<div class="login-wrap">
+  <div class="login-card" style="text-align:center">
+    <h1>Seed Data</h1>
+    <p style="color:#94a3b8;margin:20px 0">Database already has {len(existing)} businesses.</p>
+    <a href="/" style="color:#22c55e">Return to Dashboard</a>
+  </div>
+</div></body></html>""")
+
+    # Create test businesses
+    businesses = [
+        {"name": "Downtown Coffee Co", "type": "Coffee shop", "city": "Nacogdoches", "description": "Artisan coffee and pastries in historic downtown", "punches_needed": 5, "discount_percent": 15},
+        {"name": "Mario's Hair Salon", "type": "Hair salon", "city": "Lufkin", "description": "Professional haircuts and styling for all ages", "punches_needed": 8, "discount_percent": 20},
+        {"name": "Sparkle Nails", "type": "Nail salon", "city": "Nacogdoches", "description": "Manicures, pedicures, and nail art", "punches_needed": 10, "discount_percent": 25},
+    ]
+
+    created_biz = []
+    for b in businesses:
+        biz_id = create_loyalty_business(**b)
+        created_biz.append(biz_id)
+
+    # Create test customers
+    customers = [
+        {"name": "Maria Garcia", "email": "maria@test.com", "phone": "+19365550001"},
+        {"name": "James Wilson", "email": "james@test.com", "phone": "+19365550002"},
+        {"name": "Ana Martinez", "email": "ana@test.com", "phone": "+19365550003"},
+    ]
+
+    created_cust = []
+    for c in customers:
+        cust_id = create_customer(c["name"], c["email"], c["phone"])
+        created_cust.append(cust_id)
+
+    # Create referral codes
+    if created_biz and created_cust:
+        code = get_or_create_referral_code(created_cust[0], created_biz[0], "Maria")
+
+    return render_template_string(f"""<!DOCTYPE html><html><head>
+<title>Seed Data — Piney Digital</title>{BASE_CSS}</head><body>
+<div class="login-wrap">
+  <div class="login-card" style="text-align:center">
+    <h1 style="color:#22c55e">Seed Data Created!</h1>
+    <p style="color:#94a3b8;margin:20px 0">
+      Created {len(created_biz)} businesses and {len(created_cust)} customers.
+    </p>
+    <div style="text-align:left;background:#0f172a;padding:16px;border-radius:8px;margin:20px 0;font-size:13px">
+      <p style="color:#64748b;margin-bottom:8px">Test Businesses:</p>
+      {''.join([f'<p style="color:#e2e8f0">• {b["name"]} ({b["city"]})</p>' for b in businesses])}
+      <p style="color:#64748b;margin:16px 0 8px">Test Customers:</p>
+      {''.join([f'<p style="color:#e2e8f0">• {c["name"]} ({c["email"]})</p>' for c in customers])}
+    </div>
+    <a href="/app" style="display:inline-block;background:#22c55e;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none">View Customer App</a>
+    <p style="margin-top:16px"><a href="/" style="color:#64748b">Return to Dashboard</a></p>
+  </div>
+</div></body></html>""")
+
+
 @app.route("/")
+def landing():
+    """Public landing page with login options for all user types."""
+    # If admin logged in, redirect to dashboard
+    if session.get("logged_in"):
+        return redirect(url_for("overview"))
+
+    return render_template_string(f"""<!DOCTYPE html><html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Piney Digital — Loyalty Platform</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+     background:linear-gradient(135deg,#0a1628 0%,#1a3a2a 100%);
+     min-height:100vh;color:#e2e8f0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px}}
+.header{{text-align:center;margin-bottom:48px}}
+.header h1{{font-size:36px;font-weight:700;color:#fff;margin-bottom:8px}}
+.header h1 span{{color:#22c55e}}
+.header p{{color:#94a3b8;font-size:16px}}
+.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;max-width:900px;width:100%}}
+.card{{background:#1e293b;border:1px solid #334155;border-radius:16px;padding:32px;text-align:center;transition:all .2s}}
+.card:hover{{transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,0.4)}}
+.card .icon{{font-size:48px;margin-bottom:16px}}
+.card h2{{font-size:20px;font-weight:600;color:#fff;margin-bottom:8px}}
+.card p{{color:#94a3b8;font-size:14px;margin-bottom:24px}}
+.card .btn{{display:block;width:100%;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin-bottom:8px}}
+.btn-admin{{background:#166534;color:#86efac}}
+.btn-business{{background:#1e40af;color:#93c5fd}}
+.btn-customer{{background:#7c2d12;color:#fdba74}}
+.card .link{{color:#64748b;font-size:13px}}
+.card .link a{{color:#3b82f6}}
+@media (max-width: 640px) {{
+  .header h1{{font-size:28px}}
+  .cards{{grid-template-columns:1fr}}
+  .card{{padding:24px}}
+}}
+</style></head><body>
+<div class="header">
+  <h1>Piney <span>Digital</span></h1>
+  <p>Loyalty & Customer Engagement Platform</p>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="icon">Admin</div>
+    <h2>Admin Dashboard</h2>
+    <p>Manage leads, loyalty programs, and system settings</p>
+    <a href="/login" class="btn btn-admin">Admin Login</a>
+  </div>
+
+  <div class="card">
+    <div class="icon">Business</div>
+    <h2>Business Portal</h2>
+    <p>Manage your loyalty program, scan QR codes, track customers</p>
+    <a href="/portal/login" class="btn btn-business">Business Login</a>
+    <p class="link">New here? <a href="/portal/signup">Create account</a></p>
+  </div>
+
+  <div class="card">
+    <div class="icon">Customer</div>
+    <h2>Customer App</h2>
+    <p>View loyalty cards, earn rewards, discover local businesses</p>
+    <a href="/app" class="btn btn-customer">Browse Businesses</a>
+    <p class="link">Have an account? <a href="/app/login">Sign in</a></p>
+  </div>
+</div>
+
+</body></html>""")
+
+
+@app.route("/admin")
+@app.route("/dashboard")
 @login_required
 def overview():
     stats  = get_stats()
