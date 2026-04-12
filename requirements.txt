@@ -1,0 +1,44 @@
+# Piney Digital Outreach System — Python dependencies
+# Install with: pip install -r requirements.txt --break-system-packages
+
+# Security
+bcrypt==4.2.1
+
+# Module 1 — Scraper
+playwright==1.50.0
+beautifulsoup4==4.12.3
+pandas==2.2.2
+requests==2.32.3
+python-dotenv==1.0.1
+
+# Module 2 — Website checker
+python-whois==0.9.4
+dateparser==1.2.0
+
+# Module 3 — Enrichment
+phonenumbers==8.13.39
+
+# Module 4 — AI writer
+anthropic==0.42.0
+groq==0.18.0
+jinja2==3.1.4
+
+# Module 5 — Sending engine
+twilio==9.2.3
+
+# Module 6 — Reply handler + dashboard
+flask==3.0.3
+
+# Module 8 — AI Voice Calling (Vapi)
+# Uses requests (already listed above)
+
+# Production server
+gunicorn>=21.0.0
+
+# QR code generation
+qrcode>=7.0.0
+Pillow>=10.0.0
+
+# Additional dependencies
+pytz>=2023.0
+werkzeug>=3.0.0
