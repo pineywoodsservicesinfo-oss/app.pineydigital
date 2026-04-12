@@ -5426,6 +5426,41 @@ def health_check():
         return jsonify({"status": "unhealthy", "error": str(e)}), 500
 
 
+@app.route("/api/leads/count")
+def leads_count():
+    """Get lead count - public endpoint for debugging."""
+    conn = get_connection()
+    c = conn.cursor()
+
+    # Total leads
+    c.execute("SELECT COUNT(*) FROM leads")
+    total = c.fetchone()[0]
+
+    # Leads with phone
+    c.execute("SELECT COUNT(*) FROM leads WHERE phone IS NOT NULL AND phone != ''")
+    with_phone = c.fetchone()[0]
+
+    # Leads ready to call (phone + score >= 60)
+    c.execute("SELECT COUNT(*) FROM leads WHERE phone IS NOT NULL AND phone != '' AND lead_score >= 60")
+    ready_to_call = c.fetchone()[0]
+
+    conn.close()
+    return jsonify({
+        "total": total,
+        "with_phone": with_phone,
+        "ready_to_call": ready_to_call
+    })
+
+
+@app.route("/api/leads/seed")
+@login_required
+def seed_leads_manually():
+    """Manually trigger lead seeding."""
+    from modules.database import seed_leads_from_csv
+    seed_leads_from_csv()
+    return redirect(url_for("leads_count"))
+
+
 @app.errorhandler(404)
 def not_found(error):
     """Handle 404 errors."""
