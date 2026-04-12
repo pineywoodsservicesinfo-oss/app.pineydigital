@@ -67,68 +67,14 @@ def send_email(to_email: str, subject: str, body: str, html_body: str = None) ->
 def send_email_resend(to_email: str, subject: str, body: str, html_body: str = None) -> Tuple[bool, str]:
     """Send email via Resend API."""
     try:
-        # Use onboarding@resend.dev if domain not verified
-        # This only works when sending to the account email
-        from_email = FROM_EMAIL
-        try:
-            # Try with custom domain first
-            data = {
-                "from": f"{FROM_NAME} <{from_email}>",
-                "to": [to_email],
-                "subject": subject,
-                "text": body,
-            }
-            if html_body:
-                data["html"] = html_body
-
-            req = urllib.request.Request(
-                "https://api.resend.com/emails",
-                data=json.dumps(data).encode("utf-8"),
-                headers={
-                    "Authorization": f"Bearer {RESEND_API_KEY}",
-                    "Content-Type": "application/json"
-                },
-                method="POST"
-            )
-
-            with urllib.request.urlopen(req, timeout=30) as response:
-                result = json.loads(response.read().decode("utf-8"))
-                logger.info(f"Email sent via Resend to {to_email}: {result.get('id', 'unknown')}")
-                return True, "Email sent"
-        except urllib.error.HTTPError as e:
-            error_body = e.read().decode("utf-8") if e.fp else "Unknown error"
-            if e.code == 403:
-                # Domain not verified, try with Resend's test domain
-                from_email = "onboarding@resend.dev"
-                data = {
-                    "from": f"{FROM_NAME} <{from_email}>",
-                    "to": [to_email],
-                    "subject": subject,
-                    "text": body,
-                }
-                if html_body:
-                    data["html"] = html_body
-
-                req = urllib.request.Request(
-                    "https://api.resend.com/emails",
-                    data=json.dumps(data).encode("utf-8"),
-                    headers={
-                        "Authorization": f"Bearer {RESEND_API_KEY}",
-                        "Content-Type": "application/json"
-                    },
-                    method="POST"
-                )
-
-                with urllib.request.urlopen(req, timeout=30) as response:
-                    result = json.loads(response.read().decode("utf-8"))
-                    logger.info(f"Email sent via Resend (test domain) to {to_email}: {result.get('id', 'unknown')}")
-                    return True, "Email sent"
-            logger.error(f"Resend API error: {e.code} - {error_body}")
-            return False, f"Resend error: {e.code}"
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode("utf-8") if e.fp else "Unknown error"
-        logger.error(f"Resend API error: {e.code} - {error_body}")
-        return False, f"Resend error: {e.code} - {error_body}"
+        data = {
+            "from": f"{FROM_NAME} <{FROM_EMAIL}>",
+            "to": [to_email],
+            "subject": subject,
+            "text": body,
+        }
+        if html_body:
+            data["html"] = html_body
 
         req = urllib.request.Request(
             "https://api.resend.com/emails",
@@ -148,7 +94,7 @@ def send_email_resend(to_email: str, subject: str, body: str, html_body: str = N
     except urllib.error.HTTPError as e:
         error_body = e.read().decode("utf-8") if e.fp else "Unknown error"
         logger.error(f"Resend API error: {e.code} - {error_body}")
-        return False, f"Resend error: {e.code}"
+        return False, f"Resend error: {e.code} - {error_body}"
     except Exception as e:
         logger.error(f"Failed to send email via Resend to {to_email}: {e}")
         return False, str(e)
