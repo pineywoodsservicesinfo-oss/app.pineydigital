@@ -16,8 +16,7 @@ import os
 import json
 import logging
 from typing import Tuple
-import urllib.request
-import urllib.error
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -76,25 +75,25 @@ def send_email_resend(to_email: str, subject: str, body: str, html_body: str = N
         if html_body:
             data["html"] = html_body
 
-        req = urllib.request.Request(
+        response = requests.post(
             "https://api.resend.com/emails",
-            data=json.dumps(data).encode("utf-8"),
             headers={
                 "Authorization": f"Bearer {RESEND_API_KEY}",
                 "Content-Type": "application/json"
             },
-            method="POST"
+            json=data,
+            timeout=30
         )
 
-        with urllib.request.urlopen(req, timeout=30) as response:
-            result = json.loads(response.read().decode("utf-8"))
+        if response.status_code == 200:
+            result = response.json()
             logger.info(f"Email sent via Resend to {to_email}: {result.get('id', 'unknown')}")
             return True, "Email sent"
+        else:
+            error_msg = response.text
+            logger.error(f"Resend API error: {response.status_code} - {error_msg}")
+            return False, f"Resend error: {response.status_code} - {error_msg}"
 
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode("utf-8") if e.fp else "Unknown error"
-        logger.error(f"Resend API error: {e.code} - {error_body}")
-        return False, f"Resend error: {e.code} - {error_body}"
     except Exception as e:
         logger.error(f"Failed to send email via Resend to {to_email}: {e}")
         return False, str(e)
