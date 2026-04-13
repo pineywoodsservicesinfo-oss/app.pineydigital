@@ -4053,8 +4053,13 @@ def get_call_stats():
 
     conn.close()
 
+    # 'queued' status means ready to call, so include it in 'new'
+    queued_count = status_counts.get('queued', 0)
+    processed_count = sum(v for k, v in status_counts.items() if k != 'queued')
+
     return {
-        'new': with_phone - sum(status_counts.values()),
+        'new': (with_phone - processed_count) if with_phone > processed_count else queued_count,
+        'queued': queued_count,
         'called': status_counts.get('called', 0),
         'interested': status_counts.get('interested', 0),
         'transferred': status_counts.get('transferred', 0),
