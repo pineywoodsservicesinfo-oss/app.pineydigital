@@ -230,12 +230,16 @@ def run_caller(
         min_score : minimum lead score to include
         call_status: filter leads by call_status (None = new leads only)
     """
+    # Ensure logs directory exists
+    logs_dir = os.path.join(os.path.dirname(__file__), "..", "logs")
+    os.makedirs(logs_dir, exist_ok=True)
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=[
             logging.StreamHandler(),
-            logging.FileHandler(os.path.join(os.path.dirname(__file__), "..", "logs", "caller.log"),),
+            logging.FileHandler(os.path.join(logs_dir, "caller.log"),),
         ]
     )
 
