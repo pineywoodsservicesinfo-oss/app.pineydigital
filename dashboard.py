@@ -19,13 +19,18 @@ import sys
 import json
 import sqlite3
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from functools import wraps
 from flask import (Flask, render_template_string, redirect,
                    url_for, request, session, jsonify)
 
 logger = logging.getLogger(__name__)
+
+# ── Call Scheduler State ─────────────────────────────────────
+# Track when we last started calls to avoid duplicate starts
+_last_call_start_date = None  # YYYY-MM-DD format
+_call_scheduler_running = False
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -5670,7 +5675,109 @@ def vapi_status():
     return {"status": "ok"}
 
 
+# ═══════════════════════════════════════════════════════════════
+# AUTOMATIC CALL SCHEDULER
+# ═══════════════════════════════════════════════════════════════
+
+def start_scheduled_calls():
+    """
+    Automatically start calling when the calling window opens.
+    Runs on a schedule: 9:00 AM CT, Mon-Fri
+    """
+    global _last_call_start_date
+
+    try:
+        import pytz
+        ct_zone = pytz.timezone("America/Chicago")
+        now_ct = datetime.now(ct_zone)
+    except ImportError:
+        # Fallback for UTC offset
+        now_ct = datetime.now()
+
+    today_str = now_ct.strftime("%Y-%m-%d")
+
+    # Check if we already started calls today
+    if _last_call_start_date == today_str:
+        logger.debug("Calls already started today: %s", today_str)
+        return
+
+    # Check if it's a weekday
+    if now_ct.weekday() >= 5:  # Sat=5, Sun=6
+        logger.debug("Skipping call scheduler - weekend")
+        return
+
+    # Check if we're in the calling window (9 AM - 7 PM CT)
+    hour = now_ct.hour
+    if hour < 9 or hour >= 19:
+        logger.debug("Outside calling window - hour: %d", hour)
+        return
+
+    # Check if there are leads to call
+    stats = get_call_stats()
+    ready_to_call = stats.get('queued', 0) + stats.get('new', 0)
+
+    if ready_to_call == 0:
+        logger.info("No leads ready to call")
+        return
+
+    logger.info("="*50)
+    logger.info("AUTO CALL SCHEDULER: Starting calls")
+    logger.info("Time: %s CT", now_ct.strftime("%Y-%m-%d %H:%M"))
+    logger.info("Leads ready: %d", ready_to_call)
+
+    # Run the caller
+    from modules.caller import run_caller
+    try:
+        result = run_caller(limit=None, dry_run=False, force=False)
+        logger.info("Call batch completed: %s", result)
+        _last_call_start_date = today_str
+    except Exception as e:
+        logger.error("Auto call scheduler error: %s", e)
+
+
+def init_scheduler():
+    """Initialize the APScheduler for automatic calling."""
+    global _call_scheduler_running
+
+    if _call_scheduler_running:
+        return
+
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from apscheduler.triggers.interval import IntervalTrigger
+
+        scheduler = BackgroundScheduler(daemon=True)
+        scheduler.add_executor('processpool')
+
+        # Check every 5 minutes during calling window
+        scheduler.add_job(
+            start_scheduled_calls,
+            trigger=IntervalTrigger(minutes=5),
+            id='auto_call_scheduler',
+            name='Auto Call Scheduler',
+            replace_existing=True
+        )
+
+        scheduler.start()
+        _call_scheduler_running = True
+        logger.info("Call scheduler initialized - will auto-start at 9 AM CT on weekdays")
+        print("  [Scheduler] Auto-call scheduler started - checks every 5 minutes")
+
+    except Exception as e:
+        logger.warning("Could not initialize scheduler: %s", e)
+        print(f"  [Scheduler] Warning: Could not start auto-call scheduler: {e}")
+
+
 # ── Run ────────────────────────────────────────────────────
+# Initialize scheduler for production (Railway/gunicorn)
+# This runs when the app is imported by gunicorn
+import atexit
+try:
+    init_scheduler()
+    atexit.register(lambda: None)  # Keep scheduler alive
+except Exception as e:
+    logger.warning("Scheduler init skipped: %s", e)
+
 if __name__ == "__main__":
     port = int(os.environ.get("DASHBOARD_PORT", 5000))
     print(f"\n  Piney Digital Dashboard")

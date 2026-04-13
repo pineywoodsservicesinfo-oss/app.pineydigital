@@ -42,4 +42,5 @@ Pillow>=10.0.0
 # Additional dependencies
 pytz>=2023.0
 werkzeug>=3.0.0
+apscheduler>=3.10.0
 # Redeploy 1776030848
