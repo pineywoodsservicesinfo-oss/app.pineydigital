@@ -47,7 +47,7 @@ VAPI_ASSISTANT_ID = os.environ.get("VAPI_ASSISTANT_ID", "f886225b-79eb-4c04-9266
 # ── Calling schedule (Central Time) ────────────────────────
 TIMEZONE         = "America/Chicago"   # Lufkin, TX — Central Time
 CALL_HOUR_START  = 9                    # 9:00 AM Central
-CALL_HOUR_END    = 19                   # 7:00 PM Central (19:00)
+CALL_HOUR_END    = 14                    # 2:00 PM Central (14:00)
 CALL_WEEKDAYS    = [0, 1, 2, 3, 4]     # Mon=0 Tue=1 Wed=2 Thu=3 Fri=4
 
 # ── Rate limiting ────────────────────────────────────────────

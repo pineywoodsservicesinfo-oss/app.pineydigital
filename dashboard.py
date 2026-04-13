@@ -5706,9 +5706,9 @@ def start_scheduled_calls():
         logger.debug("Skipping call scheduler - weekend")
         return
 
-    # Check if we're in the calling window (9 AM - 7 PM CT)
+    # Check if we're in the calling window (9 AM - 2 PM CT)
     hour = now_ct.hour
-    if hour < 9 or hour >= 19:
+    if hour < 9 or hour >= 14:
         logger.debug("Outside calling window - hour: %d", hour)
         return
 
