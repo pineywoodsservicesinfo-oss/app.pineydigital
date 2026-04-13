@@ -255,3 +255,94 @@ If you didn't request this, ignore this email.
 """
 
     return send_email(email, subject, body)
+
+
+def send_daily_call_summary(stats: dict, hot_leads: list = None) -> Tuple[bool, str]:
+    """
+    Send daily call summary email.
+
+    Args:
+        stats: Dict with call stats (called, interested, voicemail, etc.)
+        hot_leads: List of hot lead dicts with business_name, city, phone
+
+    Returns:
+        (success, message)
+    """
+    subject = f"Daily Call Summary - {stats.get('called', 0)} Calls Made"
+
+    # Build plain text body
+    body = f"""Daily AI Calling Summary
+
+Calls Made: {stats.get('called', 0)}
+Hot Leads: {stats.get('interested', 0)}
+Voicemails: {stats.get('voicemail', 0)}
+Transferred: {stats.get('transferred', 0)}
+No Answer: {stats.get('no_answer', 0)}
+Declined: {stats.get('declined', 0)}
+Ready to Call: {stats.get('queued', 0) + stats.get('new', 0)}
+
+"""
+
+    if hot_leads:
+        body += "Hot Leads:\n"
+        for lead in hot_leads:
+            body += f"  - {lead.get('business_name', 'Unknown')} ({lead.get('city', 'Unknown')})\n"
+
+    body += "\nView details: https://app.pineydigital.com/call\n\n- Piney Digital"
+
+    # Build HTML body
+    hot_leads_html = ""
+    if hot_leads:
+        hot_leads_html = """
+        <div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-top:16px;">
+          <h3 style="color:#166534;margin:0 0 12px;">🔥 Hot Leads</h3>
+          <ul style="margin:0;padding-left:20px;">
+        """
+        for lead in hot_leads:
+            hot_leads_html += f"<li>{lead.get('business_name', 'Unknown')} ({lead.get('city', 'Unknown')})</li>"
+        hot_leads_html += "</ul></div>"
+
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; padding: 40px; }}
+        .container {{ max-width: 500px; margin: 0 auto; background: white; border-radius: 12px; padding: 40px; }}
+        .stats {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }}
+        .stat {{ background: #f8fafc; border-radius: 8px; padding: 12px; text-align: center; }}
+        .stat-val {{ font-size: 24px; font-weight: bold; color: #1e40af; }}
+        .stat-label {{ font-size: 12px; color: #64748b; }}
+        .green {{ color: #22c55e; }}
+        .btn {{ display: inline-block; background: #22c55e; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin-top: 20px; }}
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h2 style="margin:0 0 24px;">📊 Daily Call Summary</h2>
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-val">{stats.get('called', 0)}</div>
+            <div class="stat-label">Calls Made</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val green">{stats.get('interested', 0)}</div>
+            <div class="stat-label">Hot Leads</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val">{stats.get('voicemail', 0)}</div>
+            <div class="stat-label">Voicemails</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val">{stats.get('no_answer', 0)}</div>
+            <div class="stat-label">No Answer</div>
+          </div>
+        </div>
+        {hot_leads_html}
+        <a href="https://app.pineydigital.com/call" class="btn">View Dashboard</a>
+      </div>
+    </body>
+    </html>
+    """
+
+    return send_email(ADMIN_EMAIL, subject, body, html_body)

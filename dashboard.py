@@ -5735,6 +5735,56 @@ def start_scheduled_calls():
         logger.error("Auto call scheduler error: %s", e)
 
 
+def send_daily_summary_email():
+    """
+    Send daily call summary email at 2 PM CT.
+    """
+    global _last_call_start_date
+
+    try:
+        import pytz
+        ct_zone = pytz.timezone("America/Chicago")
+        now_ct = datetime.now(ct_zone)
+    except ImportError:
+        now_ct = datetime.now()
+
+    # Only send at 2 PM CT (hour 14) on weekdays
+    if now_ct.weekday() >= 5:  # Weekend
+        return
+
+    hour = now_ct.hour
+    if hour != 14:
+        return
+
+    # Check if we already sent summary today
+    today_str = now_ct.strftime("%Y-%m-%d")
+    summary_key = f"summary_{today_str}"
+
+    # Get call stats
+    stats = get_call_stats()
+
+    # Get hot leads (interested or transferred) from today
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT business_name, city
+        FROM leads
+        WHERE call_status IN ('interested', 'transferred')
+        AND date(last_call_at) = date('now')
+    """)
+    hot_leads = [{"business_name": row[0], "city": row[1]} for row in c.fetchall()]
+    conn.close()
+
+    # Send email
+    from modules.email_sender import send_daily_call_summary
+    success, msg = send_daily_call_summary(stats, hot_leads)
+
+    if success:
+        logger.info("Daily call summary email sent: %s", msg)
+    else:
+        logger.error("Failed to send daily summary: %s", msg)
+
+
 def init_scheduler():
     """Initialize the APScheduler for automatic calling."""
     global _call_scheduler_running
@@ -5758,10 +5808,20 @@ def init_scheduler():
             replace_existing=True
         )
 
+        # Daily summary email at 2 PM CT
+        scheduler.add_job(
+            send_daily_summary_email,
+            trigger=IntervalTrigger(minutes=5),
+            id='daily_summary_email',
+            name='Daily Summary Email',
+            replace_existing=True
+        )
+
         scheduler.start()
         _call_scheduler_running = True
-        logger.info("Call scheduler initialized - will auto-start at 9 AM CT on weekdays")
-        print("  [Scheduler] Auto-call scheduler started - checks every 5 minutes")
+        logger.info("Call scheduler initialized - auto-start at 9 AM, summary email at 2 PM CT")
+        print("  [Scheduler] Auto-call scheduler started")
+        print("  [Scheduler] Daily summary email at 2 PM CT")
 
     except Exception as e:
         logger.warning("Could not initialize scheduler: %s", e)
