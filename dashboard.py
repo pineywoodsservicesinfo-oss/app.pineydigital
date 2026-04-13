@@ -90,7 +90,7 @@ DB_PATH = Path(os.environ.get("DATABASE_PATH", Path(__file__).parent / "data" / 
 (DB_PATH.parent if isinstance(DB_PATH, Path) else Path(DB_PATH).parent).mkdir(parents=True, exist_ok=True)
 
 # Initialize all tables
-from modules.database import init_db, seed_leads_from_csv
+from modules.database import init_db, seed_leads_from_csv, update_lead
 init_db()  # Core tables (admin_sessions, leads, etc.)
 seed_leads_from_csv()  # Import leads from CSV if database is empty
 init_loyalty_tables()
@@ -5497,6 +5497,177 @@ def server_error(error):
   </div>
 </div>
 </body></html>"""), 500
+
+
+# ═══════════════════════════════════════════════════════════════
+# VAPI WEBHOOKS — AI Voice Call Callbacks
+# ═══════════════════════════════════════════════════════════════
+
+@app.route("/webhook/vapi/call-ended", methods=["POST"])
+def vapi_call_ended():
+    """
+    Vapi POSTs here when an AI call ends.
+
+    Payload includes:
+    - call.id: Vapi call ID
+    - call.status: ended, voicemail, transferred, no-answer
+    - call.transcript: Full conversation transcript
+    - call.summary: AI-generated summary
+    - call.duration: Duration in seconds
+    - customer.number: The lead's phone number
+    """
+    import re
+    data = request.json or {}
+    logger.info("="*50)
+    logger.info("Vapi call-ended webhook received")
+    logger.info("Payload: %s", json.dumps(data, indent=2)[:500])
+
+    # Extract call data
+    call_data    = data.get("call", {})
+    call_id      = call_data.get("id", "unknown")
+    call_status  = call_data.get("status", "ended")
+    transcript   = call_data.get("transcript", "")
+    summary      = call_data.get("summary", "")
+    duration     = call_data.get("durationSeconds", 0)
+    customer_num = data.get("customer", {}).get("number", "")
+
+    logger.info("  Call ID   : %s", call_id)
+    logger.info("  Status    : %s", call_status)
+    logger.info("  Duration  : %s seconds", duration)
+    logger.info("  Customer  : %s", customer_num)
+
+    if not customer_num:
+        logger.warning("  No customer number in payload")
+        return {"status": "error", "message": "No customer number"}, 400
+
+    # ── Find the lead by phone ──────────────────────────────
+    # Normalize phone number
+    digits = re.sub(r"\D", "", customer_num)
+    if len(digits) == 11 and digits[0] == "1":
+        digits = digits[1:]
+
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT id, business_name, city, category, outreach_status, lead_score
+        FROM leads
+        WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone,' ',''),'-',''),'(',''),')','')
+              LIKE ?
+        LIMIT 1
+    """, (f"%{digits}%",))
+    row = c.fetchone()
+
+    if not row:
+        conn.close()
+        logger.warning("  Unknown number: %s — not in leads DB", customer_num)
+        return {"status": "ok", "message": "Number not in leads database"}
+
+    lead = {
+        "id": row[0],
+        "business_name": row[1],
+        "city": row[2],
+        "category": row[3],
+        "outreach_status": row[4],
+        "lead_score": row[5]
+    }
+    conn.close()
+
+    logger.info("  Lead found: %s (%s)", lead["business_name"], lead["city"])
+
+    # ── Map Vapi status to our status ───────────────────────
+    status_map = {
+        "ended":       "called",
+        "voicemail":   "voicemail",
+        "transferred": "transferred",
+        "no-answer":   "no_answer",
+        "failed":      "failed",
+    }
+    our_status = status_map.get(call_status, "called")
+
+    # ── Check transcript for intent ─────────────────────────
+    if transcript:
+        transcript_lower = transcript.lower()
+        # Detect interest signals
+        if any(phrase in transcript_lower for phrase in [
+            "yes, connect me", "sure, that sounds good",
+            "i'm interested", "tell me more", "how much",
+            "what's the price", "let's talk"
+        ]):
+            our_status = "interested"
+        # Detect disinterest
+        elif any(phrase in transcript_lower for phrase in [
+            "not interested", "no thanks", "don't call",
+            "remove me", "stop calling"
+        ]):
+            our_status = "declined"
+
+    # ── Update lead ────────────────────────────────────────
+    update_fields = {
+        "call_status":   our_status,
+        "call_sid":      call_id,
+        "call_transcript": transcript[:5000] if transcript else None,
+        "call_summary":  summary[:1000] if summary else None,
+        "call_duration": duration,
+        "last_call_at":  datetime.now().isoformat(),
+    }
+    update_lead(lead["id"], update_fields)
+
+    # ── Log to outreach_log ────────────────────────────────
+    conn = get_connection()
+    conn.execute("""
+        INSERT INTO outreach_log
+            (lead_id, channel, direction, body, transcript, duration, status, external_id, sent_at)
+        VALUES (?, 'call', 'outbound', ?, ?, ?, ?, ?, datetime('now'))
+    """, (lead["id"], f"AI call - {our_status}", transcript[:2000] if transcript else None,
+          duration, our_status, call_id))
+    conn.commit()
+    conn.close()
+
+    # ── Alert Joel for interested leads ────────────────────
+    JOEL_PHONE = os.environ.get("JOEL_PHONE", "")
+    if our_status in ["interested", "transferred"] and JOEL_PHONE:
+        from modules.sms import send_sms
+        alert_msg = (
+            f"CALL HOT LEAD! {lead['business_name']} ({lead['city']}) "
+            f"Status:{our_status} Duration:{duration}s "
+            f"Call ID:{call_id}"
+        )
+        send_sms(JOEL_PHONE, alert_msg[:160])
+        logger.info("  Alert sent to Joel for hot lead")
+
+    logger.info("  DB updated — call_status: %s", our_status)
+
+    return {"status": "ok", "lead_id": lead["id"], "call_status": our_status}
+
+
+@app.route("/webhook/vapi/transcript", methods=["POST"])
+def vapi_transcript():
+    """
+    Vapi POSTs here with real-time transcript updates during a call.
+    Useful for logging conversation as it happens.
+    """
+    data = request.json or {}
+    call_id = data.get("call", {}).get("id", "")
+    transcript = data.get("transcript", "")
+
+    logger.info("Vapi transcript update for call %s", call_id)
+    logger.debug("Transcript: %s", transcript[:200])
+
+    return {"status": "ok"}
+
+
+@app.route("/webhook/vapi/status", methods=["POST"])
+def vapi_status():
+    """
+    Vapi POSTs here for call status updates (ringing, in-progress, etc.)
+    """
+    data = request.json or {}
+    call_id = data.get("call", {}).get("id", "")
+    status = data.get("call", {}).get("status", "")
+
+    logger.info("Vapi status update: call %s → %s", call_id, status)
+
+    return {"status": "ok"}
 
 
 # ── Run ────────────────────────────────────────────────────
