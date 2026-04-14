@@ -28,8 +28,7 @@ from flask import (Flask, render_template_string, redirect,
 logger = logging.getLogger(__name__)
 
 # ── Call Scheduler State ─────────────────────────────────────
-# Track when we last started calls to avoid duplicate starts
-_last_call_start_date = None  # YYYY-MM-DD format
+_summary_sent_date = None  # Track if summary email sent today
 _call_scheduler_running = False
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -5681,25 +5680,15 @@ def vapi_status():
 
 def start_scheduled_calls():
     """
-    Automatically start calling when the calling window opens.
-    Runs on a schedule: 9:00 AM CT, Mon-Fri
+    Make one call per scheduler trigger during the calling window.
+    Runs every 2 minutes to allow ~30 calls per hour.
     """
-    global _last_call_start_date
-
     try:
         import pytz
         ct_zone = pytz.timezone("America/Chicago")
         now_ct = datetime.now(ct_zone)
     except ImportError:
-        # Fallback for UTC offset
         now_ct = datetime.now()
-
-    today_str = now_ct.strftime("%Y-%m-%d")
-
-    # Check if we already started calls today
-    if _last_call_start_date == today_str:
-        logger.debug("Calls already started today: %s", today_str)
-        return
 
     # Check if it's a weekday
     if now_ct.weekday() >= 5:  # Sat=5, Sun=6
@@ -5712,34 +5701,70 @@ def start_scheduled_calls():
         logger.debug("Outside calling window - hour: %d", hour)
         return
 
-    # Check if there are leads to call
-    stats = get_call_stats()
-    ready_to_call = stats.get('queued', 0) + stats.get('new', 0)
+    # Get one lead to call
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT id, business_name, city, category, phone, owner_name, lead_score
+        FROM leads
+        WHERE phone IS NOT NULL
+          AND phone != ''
+          AND lead_score >= 60
+          AND (call_status IS NULL OR call_status IN ('queued', 'new', 'no_answer'))
+        ORDER BY lead_score DESC
+        LIMIT 1
+    """)
+    row = c.fetchone()
+    conn.close()
 
-    if ready_to_call == 0:
-        logger.info("No leads ready to call")
+    if not row:
+        logger.debug("No leads ready to call")
         return
 
-    logger.info("="*50)
-    logger.info("AUTO CALL SCHEDULER: Starting calls")
-    logger.info("Time: %s CT", now_ct.strftime("%Y-%m-%d %H:%M"))
-    logger.info("Leads ready: %d", ready_to_call)
+    lead = {
+        "id": row[0],
+        "business_name": row[1],
+        "city": row[2],
+        "category": row[3],
+        "phone": row[4],
+        "owner_name": row[5],
+        "lead_score": row[6]
+    }
 
-    # Run the caller
-    from modules.caller import run_caller
+    logger.info("SCHEDULER: Calling %s (%s) - score %d",
+                lead["business_name"], lead["city"], lead["lead_score"])
+
+    # Make the call
     try:
-        result = run_caller(limit=None, dry_run=False, force=False)
-        logger.info("Call batch completed: %s", result)
-        _last_call_start_date = today_str
+        from modules.caller import create_vapi_call, format_e164, update_lead
+        e164 = format_e164(lead["phone"])
+        if not e164:
+            logger.warning("Invalid phone for %s", lead["business_name"])
+            update_lead(lead["id"], {"call_status": "invalid_phone"})
+            return
+
+        success, result = create_vapi_call(e164, lead, dry_run=False)
+
+        if success:
+            update_lead(lead["id"], {
+                "call_status": "called",
+                "call_sid": result,
+                "last_call_at": datetime.now().isoformat(),
+            })
+            logger.info("Call initiated: %s", result)
+        else:
+            update_lead(lead["id"], {"call_status": "failed"})
+            logger.error("Call failed: %s", result)
+
     except Exception as e:
-        logger.error("Auto call scheduler error: %s", e)
+        logger.error("Scheduled call error: %s", e)
 
 
 def send_daily_summary_email():
     """
     Send daily call summary email at 2 PM CT.
     """
-    global _last_call_start_date
+    global _summary_sent_date
 
     try:
         import pytz
@@ -5758,7 +5783,9 @@ def send_daily_summary_email():
 
     # Check if we already sent summary today
     today_str = now_ct.strftime("%Y-%m-%d")
-    summary_key = f"summary_{today_str}"
+    if _summary_sent_date == today_str:
+        logger.debug("Summary already sent today: %s", today_str)
+        return
 
     # Get call stats
     stats = get_call_stats()
@@ -5780,6 +5807,7 @@ def send_daily_summary_email():
     success, msg = send_daily_call_summary(stats, hot_leads)
 
     if success:
+        _summary_sent_date = today_str
         logger.info("Daily call summary email sent: %s", msg)
     else:
         logger.error("Failed to send daily summary: %s", msg)
@@ -5799,10 +5827,10 @@ def init_scheduler():
         scheduler = BackgroundScheduler(daemon=True)
         scheduler.add_executor('processpool')
 
-        # Check every 5 minutes during calling window
+        # Make one call every 2 minutes during calling window (~30 calls/hour)
         scheduler.add_job(
             start_scheduled_calls,
-            trigger=IntervalTrigger(minutes=5),
+            trigger=IntervalTrigger(minutes=2),
             id='auto_call_scheduler',
             name='Auto Call Scheduler',
             replace_existing=True
@@ -5819,13 +5847,13 @@ def init_scheduler():
 
         scheduler.start()
         _call_scheduler_running = True
-        logger.info("Call scheduler initialized - auto-start at 9 AM, summary email at 2 PM CT")
-        print("  [Scheduler] Auto-call scheduler started")
+        logger.info("Call scheduler initialized - calls every 2 min, summary at 2 PM CT")
+        print("  [Scheduler] Auto-call: every 2 minutes during 9AM-2PM CT")
         print("  [Scheduler] Daily summary email at 2 PM CT")
 
     except Exception as e:
         logger.warning("Could not initialize scheduler: %s", e)
-        print(f"  [Scheduler] Warning: Could not start auto-call scheduler: {e}")
+        print(f"  [Scheduler] Warning: Could not start scheduler: {e}")
 
 
 # ── Run ────────────────────────────────────────────────────
