@@ -5827,10 +5827,10 @@ def init_scheduler():
         scheduler = BackgroundScheduler(daemon=True)
         scheduler.add_executor('processpool')
 
-        # Make one call every 2 minutes during calling window (~30 calls/hour)
+        # Make one call every 10 minutes during calling window (6 calls/hour)
         scheduler.add_job(
             start_scheduled_calls,
-            trigger=IntervalTrigger(minutes=2),
+            trigger=IntervalTrigger(minutes=10),
             id='auto_call_scheduler',
             name='Auto Call Scheduler',
             replace_existing=True
@@ -5847,8 +5847,8 @@ def init_scheduler():
 
         scheduler.start()
         _call_scheduler_running = True
-        logger.info("Call scheduler initialized - calls every 2 min, summary at 2 PM CT")
-        print("  [Scheduler] Auto-call: every 2 minutes during 9AM-2PM CT")
+        logger.info("Call scheduler initialized - calls every 10 min (6/hr), summary at 2 PM CT")
+        print("  [Scheduler] Auto-call: every 10 min during 9AM-2PM CT (6 calls/hr)")
         print("  [Scheduler] Daily summary email at 2 PM CT")
 
     except Exception as e:
