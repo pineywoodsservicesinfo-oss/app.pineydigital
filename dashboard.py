@@ -28,7 +28,6 @@ from flask import (Flask, render_template_string, redirect,
 logger = logging.getLogger(__name__)
 
 # ── Call Scheduler State ─────────────────────────────────────
-_summary_sent_date = None  # Track if summary email sent today
 _call_scheduler_running = False
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -5763,9 +5762,8 @@ def start_scheduled_calls():
 def send_daily_summary_email():
     """
     Send daily call summary email at 2 PM CT.
+    Uses database to track last send (survives container restarts).
     """
-    global _summary_sent_date
-
     try:
         import pytz
         ct_zone = pytz.timezone("America/Chicago")
@@ -5781,9 +5779,12 @@ def send_daily_summary_email():
     if hour != 14:
         return
 
-    # Check if we already sent summary today
+    # Check if we already sent summary today (stored in database)
+    from modules.database import get_setting, set_setting
     today_str = now_ct.strftime("%Y-%m-%d")
-    if _summary_sent_date == today_str:
+    last_sent = get_setting("last_summary_email_date", "")
+
+    if last_sent == today_str:
         logger.debug("Summary already sent today: %s", today_str)
         return
 
@@ -5807,7 +5808,7 @@ def send_daily_summary_email():
     success, msg = send_daily_call_summary(stats, hot_leads)
 
     if success:
-        _summary_sent_date = today_str
+        set_setting("last_summary_email_date", today_str)
         logger.info("Daily call summary email sent: %s", msg)
     else:
         logger.error("Failed to send daily summary: %s", msg)

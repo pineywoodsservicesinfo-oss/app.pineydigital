@@ -160,6 +160,13 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_business_users_business ON business_users(business_id);
         CREATE INDEX IF NOT EXISTS idx_admin_sessions_token    ON admin_sessions(session_token);
         CREATE INDEX IF NOT EXISTS idx_audit_log_created       ON audit_log(created_at);
+
+        -- Settings table (key-value store)
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
     """)
 
     conn.commit()
@@ -614,3 +621,27 @@ def seed_leads_from_csv():
             conn.close()
         except:
             pass
+
+
+# ── Settings Helpers ─────────────────────────────────────
+
+def get_setting(key: str, default: str = None) -> str:
+    """Get a setting value from the database."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT value FROM settings WHERE key = ?", (key,))
+    row = c.fetchone()
+    conn.close()
+    return row["value"] if row else default
+
+
+def set_setting(key: str, value: str):
+    """Set a setting value in the database."""
+    conn = get_connection()
+    conn.execute("""
+        INSERT INTO settings (key, value, updated_at)
+        VALUES (?, ?, datetime('now'))
+        ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = datetime('now')
+    """, (key, value, value))
+    conn.commit()
+    conn.close()
