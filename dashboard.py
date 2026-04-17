@@ -5821,12 +5821,26 @@ def init_scheduler():
     if _call_scheduler_running:
         return
 
+    # Use file lock to ensure only one scheduler runs across multiple workers
+    import fcntl
+    lock_file = "/tmp/scheduler.lock"
+
+    try:
+        # Try to get exclusive lock
+        lock = open(lock_file, 'w')
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock.write(f"{os.getpid()}\n")
+        lock.flush()
+    except (IOError, OSError):
+        # Another worker has the lock
+        logger.info("Scheduler already running in another worker")
+        return
+
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
         from apscheduler.triggers.interval import IntervalTrigger
 
-        scheduler = BackgroundScheduler(daemon=True)
-        scheduler.add_executor('processpool')
+        scheduler = BackgroundScheduler(daemon=False)  # Not daemon - keep running
 
         # Make one call every 10 minutes during calling window (6 calls/hour)
         scheduler.add_job(
@@ -5859,13 +5873,11 @@ def init_scheduler():
 
 # ── Run ────────────────────────────────────────────────────
 # Initialize scheduler for production (Railway/gunicorn)
-# This runs when the app is imported by gunicorn
-import atexit
+# Uses file lock so only one worker runs the scheduler
 try:
     init_scheduler()
-    atexit.register(lambda: None)  # Keep scheduler alive
 except Exception as e:
-    logger.warning("Scheduler init skipped: %s", e)
+    logger.warning("Scheduler init error: %s", e)
 
 if __name__ == "__main__":
     port = int(os.environ.get("DASHBOARD_PORT", 5000))
