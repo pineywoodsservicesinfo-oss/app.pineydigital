@@ -396,6 +396,10 @@ def get_nav(page='overview'):
       <span class="nav-icon">📞</span>
       <span class="nav-label">AI Calls</span>
     </a>
+    <a href="/admin/businesses" class="{active('businesses')}">
+      <span class="nav-icon">🏪</span>
+      <span class="nav-label">Businesses</span>
+    </a>
     <a href="/send" class="{active('send')}">
       <span class="nav-icon">📤</span>
       <span class="nav-label">Send SMS</span>
@@ -3552,6 +3556,253 @@ def logout():
 
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.route("/admin/businesses", methods=["GET", "POST"])
+@login_required
+def admin_businesses():
+    """Admin page to manage businesses - add test data or real businesses."""
+    from modules.loyalty_db import create_loyalty_business, get_all_loyalty_businesses
+    from modules.database import create_business_user, get_business_user_by_email
+    from modules.email_sender import send_email
+    import bcrypt
+    import secrets
+    import string
+
+    message = ""
+    error = ""
+
+    if request.method == "POST":
+        action = request.form.get("action")
+
+        if action == "seed":
+            # Seed test data
+            from modules.referrals_db import get_or_create_referral_code
+            from modules.loyalty_db import create_customer
+
+            businesses = [
+                {"name": "Downtown Coffee Co", "type": "Coffee shop", "city": "Nacogdoches", "description": "Artisan coffee and pastries", "punches_needed": 5, "discount_percent": 15},
+                {"name": "Mario's Hair Salon", "type": "Hair salon", "city": "Lufkin", "description": "Professional haircuts and styling", "punches_needed": 8, "discount_percent": 20},
+                {"name": "Sparkle Nails", "type": "Nail salon", "city": "Nacogdoches", "description": "Manicures and pedicures", "punches_needed": 10, "discount_percent": 25},
+            ]
+            for b in businesses:
+                create_loyalty_business(**b)
+
+            customers = [
+                {"name": "Maria Garcia", "email": "maria@test.com", "phone": "+19365550001"},
+                {"name": "James Wilson", "email": "james@test.com", "phone": "+19365550002"},
+            ]
+            for c in customers:
+                create_customer(c["name"], c["email"], c["phone"])
+
+            message = f"Created {len(businesses)} test businesses and {len(customers)} test customers."
+
+        elif action == "add_business":
+            # Add real business
+            name = request.form.get("name", "").strip()
+            email = request.form.get("email", "").strip().lower()
+            owner_name = request.form.get("owner_name", "").strip()
+            business_type = request.form.get("type", "").strip()
+            city = request.form.get("city", "").strip()
+            phone = request.form.get("phone", "").strip()
+            address = request.form.get("address", "").strip()
+            website = request.form.get("website", "").strip()
+            description = request.form.get("description", "").strip()
+            punches = int(request.form.get("punches_needed", 5))
+            discount = int(request.form.get("discount_percent", 15))
+
+            if not name or not email:
+                error = "Business name and email are required."
+            elif get_business_user_by_email(email):
+                error = f"A user with email {email} already exists."
+            else:
+                # Generate random password
+                alphabet = string.ascii_letters + string.digits
+                password = ''.join(secrets.choice(alphabet) for _ in range(12))
+                password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+                # Create business
+                biz_id = create_loyalty_business(
+                    name=name, business_type=business_type, city=city,
+                    phone=phone, description=description, address=address,
+                    website=website, punches=punches, discount=discount
+                )
+
+                # Create user account
+                user_id = create_business_user(email, password_hash, owner_name, plan="starter")
+
+                # Link user to business
+                conn = get_connection()
+                conn.execute("UPDATE business_users SET business_id = ? WHERE id = ?", (biz_id, user_id))
+                conn.commit()
+                conn.close()
+
+                # Send credentials email
+                subject = f"Welcome to Piney Digital - Your {name} Account"
+                body = f"""Hi {owner_name or 'there'},
+
+Your {name} business account has been created on Piney Digital!
+
+Login URL: https://app.pineydigital.com/portal/login
+Email: {email}
+Password: {password}
+
+Please log in and change your password in Settings.
+
+Your loyalty program is ready:
+- {punches} punches needed for reward
+- {discount}% discount for loyal customers
+
+Questions? Reply to this email.
+
+- Piney Digital Team
+"""
+                html_body = f"""
+<!DOCTYPE html>
+<html><head><style>
+body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; padding: 40px; }}
+.container {{ max-width: 500px; margin: 0 auto; background: white; border-radius: 12px; padding: 40px; }}
+.logo {{ font-size: 24px; margin-bottom: 24px; }}
+.creds {{ background: #f0fdf4; border-radius: 8px; padding: 20px; margin: 24px 0; }}
+.creds p {{ margin: 8px 0; font-size: 14px; }}
+.creds strong {{ color: #166534; }}
+</style></head>
+<body>
+<div class="container">
+  <div class="logo">Piney Digital</div>
+  <h2>Welcome, {owner_name or 'Business Owner'}!</h2>
+  <p>Your <strong>{name}</strong> account is ready.</p>
+  <div class="creds">
+    <p><strong>Login URL:</strong> app.pineydigital.com/portal/login</p>
+    <p><strong>Email:</strong> {email}</p>
+    <p><strong>Password:</strong> <code style="font-size:16px;background:#dcfce7;padding:4px 8px;border-radius:4px">{password}</code></p>
+  </div>
+  <p>Your loyalty program settings:</p>
+  <ul>
+    <li>{punches} punches for reward</li>
+    <li>{discount}% discount for customers</li>
+  </ul>
+  <p style="color:#64748b;font-size:12px;margin-top:24px">Please log in and change your password.</p>
+</div>
+</body></html>
+"""
+                success, err = send_email(email, subject, body, html_body)
+
+                if success:
+                    message = f"Business '{name}' created! Login credentials sent to {email}"
+                else:
+                    message = f"Business created, but email failed: {err}. Password: {password}"
+
+    # Get existing businesses
+    businesses = get_all_loyalty_businesses()
+
+    return render_template_string(f"""<!DOCTYPE html><html><head>
+<title>Manage Businesses — Piney Digital</title>{BASE_CSS}</head><body>
+<div class="layout">""" + get_nav('businesses') + f"""<div class="main">
+  <div class="topbar"><h2>🏪 Manage Businesses</h2></div>
+
+  {f'<div style="background:#166534;color:#86efac;padding:12px 16px;border-radius:8px;margin-bottom:16px">{message}</div>' if message else ''}
+  {f'<div style="background:#7f1d1d;color:#fca5a5;padding:12px 16px;border-radius:8px;margin-bottom:16px">{error}</div>' if error else ''}
+
+  <div class="grid2">
+    <div class="panel">
+      <h3>🧪 Add Test Data</h3>
+      <p style="color:#94a3b8;font-size:13px;margin-bottom:16px">
+        Create sample businesses and customers for testing.
+      </p>
+      <form method="POST">
+        <input type="hidden" name="action" value="seed">
+        <button type="submit" class="btn btn-blue" style="width:100%">
+          Add Test Data (3 businesses + 2 customers)
+        </button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h3>➕ Add Real Business</h3>
+      <form method="POST" style="display:flex;flex-direction:column;gap:12px">
+        <input type="hidden" name="action" value="add_business">
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">Business Name *</label>
+            <input type="text" name="name" required style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">Owner Email *</label>
+            <input type="email" name="email" required style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:13px">
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">Owner Name</label>
+            <input type="text" name="owner_name" style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">Business Type</label>
+            <input type="text" name="type" placeholder="e.g. Coffee shop" style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:13px">
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">City</label>
+            <input type="text" name="city" style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">Phone</label>
+            <input type="tel" name="phone" style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:13px">
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">Address</label>
+          <input type="text" name="address" style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:13px">
+        </div>
+
+        <div>
+          <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">Website</label>
+          <input type="url" name="website" placeholder="https://..." style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:13px">
+        </div>
+
+        <div>
+          <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">Description</label>
+          <textarea name="description" rows="2" style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:13px;resize:vertical"></textarea>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">Punches for Reward</label>
+            <input type="number" name="punches_needed" value="5" min="1" max="20" style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px">Discount %</label>
+            <input type="number" name="discount_percent" value="15" min="5" max="50" style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:13px">
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-green" style="width:100%">
+          Create Business & Send Credentials
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:20px">
+    <h3>📋 Existing Businesses ({len(businesses)})</h3>
+    {"<p style='color:#64748b;font-size:13px;padding:20px'>No businesses yet. Add test data or create a real business above.</p>" if not businesses else ""}
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:12px">
+      {''.join([f'''
+      <div style="background:#0f172a;border-radius:8px;padding:16px">
+        <h4 style="color:#fff;margin:0 0 8px">{b["name"]}</h4>
+        <p style="color:#64748b;font-size:12px;margin:0">{b.get("type") or b.get("business_type","")} · {b.get("city","")}</p>
+        <p style="color:#94a3b8;font-size:12px;margin:4px 0 0">{b.get("punches_needed",5)} punches → {b.get("discount_percent",15)}% off</p>
+      </div>
+      ''' for b in businesses[:12]])}
+    </div>
+  </div>
+</div></body></html>""")
 
 
 @app.route("/admin/seed-test-data")
