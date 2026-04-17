@@ -3666,13 +3666,6 @@ body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 
 <div class="cards">
   <div class="card">
-    <div class="icon">Admin</div>
-    <h2>Admin Dashboard</h2>
-    <p>Manage leads, loyalty programs, and system settings</p>
-    <a href="/login" class="btn btn-admin">Admin Login</a>
-  </div>
-
-  <div class="card">
     <div class="icon">Business</div>
     <h2>Business Portal</h2>
     <p>Manage your loyalty program, scan QR codes, track customers</p>
@@ -4091,7 +4084,36 @@ def call_page():
 
         limit_int = int(limit) if limit else None
 
-        if action == "dry":
+        if action == "test":
+            # Make a single test call
+            from modules.caller import create_vapi_call, format_e164
+            conn = get_connection()
+            c = conn.cursor()
+            c.execute("""
+                SELECT id, business_name, city, phone
+                FROM leads
+                WHERE phone IS NOT NULL AND phone != ''
+                ORDER BY lead_score DESC LIMIT 1
+            """)
+            row = c.fetchone()
+            conn.close()
+
+            if row:
+                lead = {"id": row[0], "business_name": row[1], "city": row[2], "phone": row[3]}
+                e164 = format_e164(lead["phone"])
+                if e164:
+                    success, result = create_vapi_call(e164, lead, dry_run=False)
+                    if success:
+                        update_lead(lead["id"], {"call_status": "called", "call_sid": result, "last_call_at": datetime.now().isoformat()})
+                        message = f"Test call started to {lead['business_name']} (Call ID: {result})"
+                    else:
+                        message = f"Call failed: {result}"
+                else:
+                    message = f"Invalid phone number for {lead['business_name']}"
+            else:
+                message = "No leads with phone numbers found"
+
+        elif action == "dry":
             result = run_caller(limit=limit_int, dry_run=True, force=True)
             message = f"Dry run complete: {result['called']} would be called, {result['failed']} failed"
         elif action == "live":
@@ -4137,8 +4159,8 @@ def call_page():
           <div class="window-text">{win_text}</div>
         </div>
         <div style="margin-top:14px;font-size:13px;color:#94a3b8">
-          <strong>Hours:</strong> Mon–Fri, 9am–7pm CT<br>
-          <strong>Rate:</strong> 15 calls/hour max<br>
+          <strong>Hours:</strong> Mon–Fri, 9am–2pm CT<br>
+          <strong>Rate:</strong> 6 calls/hour (auto)<br>
           <strong>Current time:</strong> {ct_time}
         </div>
       </div>
@@ -4161,8 +4183,12 @@ def call_page():
             </label>
           </div>
           <div style="display:flex;gap:10px">
-            <button type="submit" name="action" value="dry" class="btn btn-blue" style="flex:1">
-              🔍 Dry run preview
+            <button type="submit" name="action" value="test" class="btn btn-blue" style="flex:1"
+              onclick="return confirm('Make a single test call now?')">
+              🧪 Test Call
+            </button>
+            <button type="submit" name="action" value="dry" class="btn btn-gray" style="flex:1">
+              🔍 Dry run
             </button>
             <button type="submit" name="action" value="live" class="btn btn-green" style="flex:1"
               onclick="return confirm('Start AI voice calls?')">
