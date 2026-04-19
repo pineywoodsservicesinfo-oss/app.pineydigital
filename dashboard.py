@@ -3575,7 +3575,20 @@ def admin_businesses():
     if request.method == "POST":
         action = request.form.get("action")
 
-        if action == "seed":
+        if action == "clear_test":
+            # Clear test data
+            conn = get_connection()
+            # Delete test businesses
+            conn.execute("DELETE FROM loyalty_businesses WHERE name IN ('Downtown Coffee Co', 'Mario''s Hair Salon', 'Sparkle Nails')")
+            # Delete test customers
+            conn.execute("DELETE FROM loyalty_customers WHERE email IN ('maria@test.com', 'james@test.com', 'ana@test.com')")
+            # Delete test business users
+            conn.execute("DELETE FROM business_users WHERE email IN ('coffee@test.com', 'salon@test.com', 'nails@test.com')")
+            conn.commit()
+            conn.close()
+            message = "Test data cleared. You can now add fresh test data."
+
+        elif action == "seed":
             # Seed test data
             from modules.referrals_db import get_or_create_referral_code
             from modules.loyalty_db import create_customer
@@ -3741,6 +3754,12 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
       <p style="color:#94a3b8;font-size:13px;margin-bottom:16px">
         Create sample businesses and customers for testing.
       </p>
+      <form method="POST" onsubmit="return confirm('This will delete all test data. Continue?')">
+        <input type="hidden" name="action" value="clear_test">
+        <button type="submit" class="btn btn-red" style="width:100%;margin-bottom:12px">
+          🗑️ Clear Test Data
+        </button>
+      </form>
       <form method="POST">
         <input type="hidden" name="action" value="seed">
         <button type="submit" class="btn btn-blue" style="width:100%">
