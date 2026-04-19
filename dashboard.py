@@ -3825,15 +3825,15 @@ def seed_test_data():
   </div>
 </div></body></html>""")
 
-    # Create test businesses
-    businesses = [
-        {"name": "Downtown Coffee Co", "type": "Coffee shop", "city": "Nacogdoches", "description": "Artisan coffee and pastries in historic downtown", "punches_needed": 5, "discount_percent": 15},
-        {"name": "Mario's Hair Salon", "type": "Hair salon", "city": "Lufkin", "description": "Professional haircuts and styling for all ages", "punches_needed": 8, "discount_percent": 20},
-        {"name": "Sparkle Nails", "type": "Nail salon", "city": "Nacogdoches", "description": "Manicures, pedicures, and nail art", "punches_needed": 10, "discount_percent": 25},
+    # Create test businesses (using correct param names for create_loyalty_business)
+    businesses_data = [
+        {"name": "Downtown Coffee Co", "business_type": "Coffee shop", "city": "Nacogdoches", "description": "Artisan coffee and pastries in historic downtown", "punches": 5, "discount": 15},
+        {"name": "Mario's Hair Salon", "business_type": "Hair salon", "city": "Lufkin", "description": "Professional haircuts and styling for all ages", "punches": 8, "discount": 20},
+        {"name": "Sparkle Nails", "business_type": "Nail salon", "city": "Nacogdoches", "description": "Manicures, pedicures, and nail art", "punches": 10, "discount": 25},
     ]
 
     created_biz = []
-    for b in businesses:
+    for b in businesses_data:
         biz_id = create_loyalty_business(**b)
         created_biz.append(biz_id)
 
@@ -3863,7 +3863,7 @@ def seed_test_data():
     </p>
     <div style="text-align:left;background:#0f172a;padding:16px;border-radius:8px;margin:20px 0;font-size:13px">
       <p style="color:#64748b;margin-bottom:8px">Test Businesses:</p>
-      {''.join([f'<p style="color:#e2e8f0">• {b["name"]} ({b["city"]})</p>' for b in businesses])}
+      {''.join([f'<p style="color:#e2e8f0">• {b["name"]} ({b["city"]})</p>' for b in businesses_data])}
       <p style="color:#64748b;margin:16px 0 8px">Test Customers:</p>
       {''.join([f'<p style="color:#e2e8f0">• {c["name"]} ({c["email"]})</p>' for c in customers])}
     </div>
