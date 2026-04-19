@@ -3579,23 +3579,54 @@ def admin_businesses():
             # Seed test data
             from modules.referrals_db import get_or_create_referral_code
             from modules.loyalty_db import create_customer
+            from modules.database import create_business_user, get_connection
+            import bcrypt
+
+            # Test password for all test accounts
+            test_password = "test1234"
+            test_password_hash = bcrypt.hashpw(test_password.encode(), bcrypt.gensalt()).decode()
 
             businesses_data = [
                 {"name": "Downtown Coffee Co", "business_type": "Coffee shop", "city": "Nacogdoches", "description": "Artisan coffee and pastries", "punches": 5, "discount": 15},
                 {"name": "Mario's Hair Salon", "business_type": "Hair salon", "city": "Lufkin", "description": "Professional haircuts and styling", "punches": 8, "discount": 20},
                 {"name": "Sparkle Nails", "business_type": "Nail salon", "city": "Nacogdoches", "description": "Manicures and pedicures", "punches": 10, "discount": 25},
             ]
-            for b in businesses_data:
-                create_loyalty_business(**b)
 
-            customers = [
+            # Create test business users with login credentials
+            test_business_users = [
+                {"email": "coffee@test.com", "owner_name": "Coffee Owner"},
+                {"email": "salon@test.com", "owner_name": "Mario Smith"},
+                {"email": "nails@test.com", "owner_name": "Nina Nails"},
+            ]
+
+            created_biz_ids = []
+            for i, b in enumerate(businesses_data):
+                biz_id = create_loyalty_business(**b)
+                created_biz_ids.append(biz_id)
+
+                # Create business user account
+                user_email = test_business_users[i]["email"]
+                user_id = create_business_user(user_email, test_password_hash, test_business_users[i]["owner_name"], plan="starter")
+
+                # Link user to business and verify email
+                conn = get_connection()
+                conn.execute("UPDATE business_users SET business_id = ?, email_verified = 1 WHERE id = ?", (biz_id, user_id))
+                conn.commit()
+                conn.close()
+
+            # Create test customers with passwords
+            customers_data = [
                 {"name": "Maria Garcia", "email": "maria@test.com", "phone": "+19365550001"},
                 {"name": "James Wilson", "email": "james@test.com", "phone": "+19365550002"},
             ]
-            for c in customers:
-                create_customer(c["name"], c["email"], c["phone"])
+            for c in customers_data:
+                create_customer(c["name"], c["email"], c["phone"], password_hash=test_password_hash)
 
-            message = f"Created {len(businesses_data)} test businesses and {len(customers)} test customers."
+            message = f"""Created {len(businesses_data)} test businesses and {len(customers_data)} test customers.
+
+<strong>Test Login Credentials (password: test1234)</strong>:
+• Business: coffee@test.com, salon@test.com, nails@test.com
+• Customer: maria@test.com, james@test.com"""
 
         elif action == "add_business":
             # Add real business
