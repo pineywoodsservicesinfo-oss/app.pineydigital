@@ -3580,12 +3580,12 @@ def admin_businesses():
             from modules.referrals_db import get_or_create_referral_code
             from modules.loyalty_db import create_customer
 
-            businesses = [
-                {"name": "Downtown Coffee Co", "type": "Coffee shop", "city": "Nacogdoches", "description": "Artisan coffee and pastries", "punches_needed": 5, "discount_percent": 15},
-                {"name": "Mario's Hair Salon", "type": "Hair salon", "city": "Lufkin", "description": "Professional haircuts and styling", "punches_needed": 8, "discount_percent": 20},
-                {"name": "Sparkle Nails", "type": "Nail salon", "city": "Nacogdoches", "description": "Manicures and pedicures", "punches_needed": 10, "discount_percent": 25},
+            businesses_data = [
+                {"name": "Downtown Coffee Co", "business_type": "Coffee shop", "city": "Nacogdoches", "description": "Artisan coffee and pastries", "punches": 5, "discount": 15},
+                {"name": "Mario's Hair Salon", "business_type": "Hair salon", "city": "Lufkin", "description": "Professional haircuts and styling", "punches": 8, "discount": 20},
+                {"name": "Sparkle Nails", "business_type": "Nail salon", "city": "Nacogdoches", "description": "Manicures and pedicures", "punches": 10, "discount": 25},
             ]
-            for b in businesses:
+            for b in businesses_data:
                 create_loyalty_business(**b)
 
             customers = [
@@ -3595,7 +3595,7 @@ def admin_businesses():
             for c in customers:
                 create_customer(c["name"], c["email"], c["phone"])
 
-            message = f"Created {len(businesses)} test businesses and {len(customers)} test customers."
+            message = f"Created {len(businesses_data)} test businesses and {len(customers)} test customers."
 
         elif action == "add_business":
             # Add real business
