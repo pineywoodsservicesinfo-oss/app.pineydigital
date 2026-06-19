@@ -693,6 +693,17 @@ CREATE TABLE IF NOT EXISTS job_photos (
 
 CREATE INDEX idx_photos_job ON job_photos(job_id);
 
+-- Job notes
+CREATE TABLE IF NOT EXISTS job_notes (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    job_id          UUID REFERENCES jobs(id) ON DELETE CASCADE,
+    note            TEXT NOT NULL,
+    created_by      VARCHAR(100),       -- Staff name who added note
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_notes_job ON job_notes(job_id);
+
 -- Crews (groups of staff)
 CREATE TABLE IF NOT EXISTS crews (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -339,6 +339,16 @@ def check_crew_availability(crew_id, scheduled_datetime, duration_min, business_
     return True, None
 
 
+def get_job_notes(job_id):
+    """Get all notes for a job."""
+    return query_db(
+        """SELECT * FROM job_notes
+           WHERE job_id = %s
+           ORDER BY created_at DESC""",
+        (job_id,)
+    )
+
+
 @cached_query("job_stats", ttl=10)
 def get_job_stats(business_id):
     """Get job statistics for dashboard - optimized single query."""
@@ -1470,6 +1480,35 @@ def fieldpulse_job_detail(job_id):
                     logger.error(f"Error updating job: {e}")
                     error = f"Error updating job: {str(e)}"
 
+        elif action == "add_note":
+            note_text = request.form.get("note", "").strip()
+            if note_text:
+                try:
+                    query_db("""INSERT INTO job_notes (job_id, note, created_by, created_at)
+                               VALUES (%s, %s, %s, NOW())""",
+                            (job_id, note_text, user_name))
+                    success = "Note added successfully!"
+                except Exception as e:
+                    logger.error(f"Error adding note: {e}")
+                    error = f"Error adding note: {str(e)}"
+
+    # Get notes for this job
+    notes = get_job_notes(job_id)
+    notes_html = ""
+    if notes:
+        for note in notes:
+            note_time = note['created_at'].strftime('%b %d, %Y at %I:%M %p') if note['created_at'] else ''
+            notes_html += f'''
+            <div class="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-slate-300">{note.get('created_by', 'Unknown')}</span>
+                    <span class="text-xs text-slate-500">{note_time}</span>
+                </div>
+                <p class="text-slate-200 whitespace-pre-wrap">{note.get('note', '')}</p>
+            </div>'''
+    else:
+        notes_html = '<p class="text-slate-500 text-center py-4">No notes yet. Add the first note below.</p>'
+
     # Status display and actions
     status_colors = {
         'scheduled': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
@@ -1676,6 +1715,27 @@ def fieldpulse_job_detail(job_id):
                                 <select name="crew_id" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">{crew_options}</select>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Job Notes -->
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <h3 class="text-lg font-medium text-white mb-4">Job Notes</h3>
+
+                        <!-- Existing Notes -->
+                        <div class="space-y-3 mb-6 max-h-64 overflow-y-auto">
+                            {notes_html}
+                        </div>
+
+                        <!-- Add Note Form -->
+                        <form method="POST" class="space-y-3">
+                            <input type="hidden" name="action" value="add_note">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Add a Note</label>
+                                <textarea name="note" rows="3" placeholder="Enter note details..." required
+                                    class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"></textarea>
+                            </div>
+                            <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition">Add Note</button>
+                        </form>
                     </div>
 
                     <!-- Actions -->
