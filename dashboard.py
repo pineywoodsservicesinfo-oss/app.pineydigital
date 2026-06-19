@@ -1191,18 +1191,98 @@ def fieldpulse_new_job():
 
                     <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
                         <h3 class="text-lg font-medium text-white mb-4">Scheduling</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Date *</label>
-                                <input type="date" name="scheduled_date" required class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+
+                        <!-- Date Selection -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-slate-300 mb-3">Date *</label>
+                            <input type="date" name="scheduled_date" required
+                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-lg"
+                                style="color-scheme: dark;"
+                                min="{datetime.now().strftime('%Y-%m-%d')}">
+                            <p class="text-xs text-slate-500 mt-2">Click to open calendar • Minimum date is today</p>
+                        </div>
+
+                        <!-- Time Selection -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-slate-300 mb-3">Time</label>
+                            <div class="grid grid-cols-4 gap-2">
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="08:00" class="peer sr-only">
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        8:00 AM
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="09:00" class="peer sr-only" checked>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        9:00 AM
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="10:00" class="peer sr-only">
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        10:00 AM
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="11:00" class="peer sr-only">
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        11:00 AM
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="12:00" class="peer sr-only">
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        12:00 PM
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="13:00" class="peer sr-only">
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        1:00 PM
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="14:00" class="peer sr-only">
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        2:00 PM
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="15:00" class="peer sr-only">
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        3:00 PM
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="16:00" class="peer sr-only">
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        4:00 PM
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="17:00" class="peer sr-only">
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        5:00 PM
+                                    </div>
+                                </label>
                             </div>
+                            <p class="text-xs text-slate-500 mt-2">9:00 AM selected by default</p>
+                        </div>
+
+                        <!-- Duration & Crew -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Time</label>
-                                <input type="time" name="scheduled_time" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Est. Duration (min)</label>
-                                <input type="number" name="estimated_duration" value="60" min="15" step="15" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Est. Duration</label>
+                                <select name="estimated_duration" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                    <option value="30">30 minutes</option>
+                                    <option value="60" selected>1 hour</option>
+                                    <option value="90">1.5 hours</option>
+                                    <option value="120">2 hours</option>
+                                    <option value="180">3 hours</option>
+                                    <option value="240">4 hours</option>
+                                    <option value="480">Full day (8 hours)</option>
+                                </select>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Crew</label>
@@ -1437,18 +1517,75 @@ def fieldpulse_job_detail(job_id):
                     <!-- Scheduling -->
                     <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
                         <h3 class="text-lg font-medium text-white mb-4">Scheduling</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Date</label>
-                                <input type="date" name="scheduled_date" value="{date_str}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+
+                        <!-- Date Selection -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-slate-300 mb-3">Date</label>
+                            <input type="date" name="scheduled_date" value="{date_str}" required
+                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-lg"
+                                style="color-scheme: dark;">
+                        </div>
+
+                        <!-- Time Selection -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-slate-300 mb-3">Time</label>
+                            <div class="grid grid-cols-4 gap-2">
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="08:00" class="peer sr-only" {'checked' if time_str == '08:00' else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">8:00 AM</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="09:00" class="peer sr-only" {'checked' if time_str == '09:00' or not time_str else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">9:00 AM</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="10:00" class="peer sr-only" {'checked' if time_str == '10:00' else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">10:00 AM</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="11:00" class="peer sr-only" {'checked' if time_str == '11:00' else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">11:00 AM</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="12:00" class="peer sr-only" {'checked' if time_str == '12:00' else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">12:00 PM</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="13:00" class="peer sr-only" {'checked' if time_str == '13:00' else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">1:00 PM</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="14:00" class="peer sr-only" {'checked' if time_str == '14:00' else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">2:00 PM</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="15:00" class="peer sr-only" {'checked' if time_str == '15:00' else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">3:00 PM</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="16:00" class="peer sr-only" {'checked' if time_str == '16:00' else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">4:00 PM</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="17:00" class="peer sr-only" {'checked' if time_str == '17:00' else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">5:00 PM</div>
+                                </label>
                             </div>
+                        </div>
+
+                        <!-- Duration & Crew -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Time</label>
-                                <input type="time" name="scheduled_time" value="{time_str}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Est. Duration (min)</label>
-                                <input type="number" name="estimated_duration" value="{job.get('estimated_duration_min', 60)}" min="15" step="15" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Est. Duration</label>
+                                <select name="estimated_duration" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                    <option value="30" {'selected' if job.get('estimated_duration_min') == 30 else ''}>30 minutes</option>
+                                    <option value="60" {'selected' if job.get('estimated_duration_min', 60) == 60 else ''}>1 hour</option>
+                                    <option value="90" {'selected' if job.get('estimated_duration_min') == 90 else ''}>1.5 hours</option>
+                                    <option value="120" {'selected' if job.get('estimated_duration_min') == 120 else ''}>2 hours</option>
+                                    <option value="180" {'selected' if job.get('estimated_duration_min') == 180 else ''}>3 hours</option>
+                                    <option value="240" {'selected' if job.get('estimated_duration_min') == 240 else ''}>4 hours</option>
+                                    <option value="480" {'selected' if job.get('estimated_duration_min') == 480 else ''}>Full day (8 hours)</option>
+                                </select>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Crew</label>
