@@ -349,6 +349,16 @@ def get_job_notes(job_id):
     )
 
 
+def get_job_photos(job_id):
+    """Get all photos for a job."""
+    return query_db(
+        """SELECT * FROM job_photos
+           WHERE job_id = %s
+           ORDER BY created_at DESC""",
+        (job_id,)
+    )
+
+
 @cached_query("job_stats", ttl=10)
 def get_job_stats(business_id):
     """Get job statistics for dashboard - optimized single query."""
@@ -1492,6 +1502,41 @@ def fieldpulse_job_detail(job_id):
                     logger.error(f"Error adding note: {e}")
                     error = f"Error adding note: {str(e)}"
 
+        elif action == "upload_photo":
+            # Handle photo upload
+            if 'photo' not in request.files:
+                error = "No photo file provided"
+            else:
+                photo_file = request.files['photo']
+                if photo_file.filename == '':
+                    error = "No photo selected"
+                elif photo_file:
+                    # Validate file type
+                    allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+                    file_ext = '.' + photo_file.filename.rsplit('.', 1)[1].lower() if '.' in photo_file.filename else ''
+                    if file_ext not in allowed_extensions:
+                        error = f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
+                    else:
+                        # For now, store as base64 data URL (in production, use S3/Railway Buckets)
+                        import base64
+                        photo_data = photo_file.read()
+                        photo_base64 = base64.b64encode(photo_data).decode('utf-8')
+                        mime_type = photo_file.content_type or 'image/jpeg'
+                        photo_url = f"data:{mime_type};base64,{photo_base64}"
+
+                        photo_type = request.form.get("photo_type", "progress")
+                        caption = request.form.get("photo_caption", "").strip()
+
+                        try:
+                            query_db("""INSERT INTO job_photos
+                                       (job_id, photo_url, photo_type, caption, created_at)
+                                       VALUES (%s, %s, %s, %s, NOW())""",
+                                    (job_id, photo_url, photo_type, caption if caption else None))
+                            success = "Photo uploaded successfully!"
+                        except Exception as e:
+                            logger.error(f"Error uploading photo: {e}")
+                            error = f"Error uploading photo: {str(e)}"
+
     # Get notes for this job
     notes = get_job_notes(job_id)
     notes_html = ""
@@ -1508,6 +1553,35 @@ def fieldpulse_job_detail(job_id):
             </div>'''
     else:
         notes_html = '<p class="text-slate-500 text-center py-4">No notes yet. Add the first note below.</p>'
+
+    # Get photos for this job
+    photos = get_job_photos(job_id)
+    photos_html = ""
+    if photos:
+        photo_type_colors = {
+            'before': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+            'after': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+            'progress': 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+            'issue': 'bg-red-500/20 text-red-400 border-red-500/30'
+        }
+        for photo in photos:
+            photo_time = photo['created_at'].strftime('%b %d, %Y at %I:%M %p') if photo['created_at'] else ''
+            type_class = photo_type_colors.get(photo.get('photo_type', 'progress'), 'bg-slate-700 text-slate-400')
+            type_label = photo.get('photo_type', 'progress').replace('_', ' ').title()
+            caption = photo.get('caption', '') or ''
+            photos_html += f'''
+            <div class="bg-slate-700/50 rounded-lg overflow-hidden border border-slate-600">
+                <div class="relative">
+                    <img src="{photo.get('photo_url', '')}" alt="Job photo" class="w-full h-48 object-cover">
+                    <span class="absolute top-2 right-2 px-2 py-1 text-xs font-medium rounded border {type_class}">{type_label}</span>
+                </div>
+                <div class="p-3">
+                    <p class="text-xs text-slate-500 mb-1">{photo_time}</p>
+                    {f'<p class="text-sm text-slate-300">{caption}</p>' if caption else ''}
+                </div>
+            </div>'''
+    else:
+        photos_html = '<p class="text-slate-500 text-center py-4">No photos yet. Upload the first photo below.</p>'
 
     # Status display and actions
     status_colors = {
@@ -1735,6 +1809,44 @@ def fieldpulse_job_detail(job_id):
                                     class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"></textarea>
                             </div>
                             <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition">Add Note</button>
+                        </form>
+                    </div>
+
+                    <!-- Job Photos -->
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <h3 class="text-lg font-medium text-white mb-4">Job Photos</h3>
+
+                        <!-- Photo Gallery -->
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6 max-h-96 overflow-y-auto">
+                            {photos_html}
+                        </div>
+
+                        <!-- Upload Photo Form -->
+                        <form method="POST" enctype="multipart/form-data" class="space-y-3">
+                            <input type="hidden" name="action" value="upload_photo">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">Photo Type</label>
+                                    <select name="photo_type" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                        <option value="progress">Progress</option>
+                                        <option value="before">Before</option>
+                                        <option value="after">After</option>
+                                        <option value="issue">Issue</option>
+                                    </select>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">Caption (optional)</label>
+                                    <input type="text" name="photo_caption" placeholder="Describe the photo..."
+                                        class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Select Photo</label>
+                                <input type="file" name="photo" accept="image/*" required
+                                    class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:bg-emerald-500 file:text-white hover:file:bg-emerald-600">
+                                <p class="text-xs text-slate-500 mt-1">Max file size: 5MB. Supported: JPG, PNG, GIF, WebP</p>
+                            </div>
+                            <button type="submit" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-medium transition">Upload Photo</button>
                         </form>
                     </div>
 
