@@ -532,11 +532,13 @@ def fieldpulse_dashboard():
         if job['status'] == 'scheduled':
             quick_actions = f'''<form method="POST" action="/fieldpulse/jobs/{job['id']}" class="inline">
                 <input type="hidden" name="action" value="start">
+                <input type="hidden" name="redirect_to" value="/fieldpulse/dashboard">
                 <button type="submit" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-1 rounded font-medium transition">▶ Start</button>
             </form>'''
         elif job['status'] == 'in_progress':
             quick_actions = f'''<form method="POST" action="/fieldpulse/jobs/{job['id']}" class="inline">
                 <input type="hidden" name="action" value="complete">
+                <input type="hidden" name="redirect_to" value="/fieldpulse/dashboard">
                 <button type="submit" class="text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded font-medium transition">✓ Complete</button>
             </form>'''
 
@@ -924,12 +926,14 @@ def fieldpulse_jobs():
             quick_actions = f'''
                 <form method="POST" action="/fieldpulse/jobs/{job['id']}" class="inline">
                     <input type="hidden" name="action" value="start">
+                    <input type="hidden" name="redirect_to" value="/fieldpulse/jobs">
                     <button type="submit" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-1 rounded font-medium transition mr-2">▶ Start</button>
                 </form>'''
         elif job['status'] == 'in_progress':
             quick_actions = f'''
                 <form method="POST" action="/fieldpulse/jobs/{job['id']}" class="inline">
                     <input type="hidden" name="action" value="complete">
+                    <input type="hidden" name="redirect_to" value="/fieldpulse/jobs">
                     <button type="submit" class="text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded font-medium transition mr-2">✓ Complete</button>
                 </form>'''
 
@@ -1255,20 +1259,20 @@ def fieldpulse_job_detail(job_id):
     if request.method == "POST":
         action = request.form.get("action", "")
 
+        # Get redirect destination (from hidden field or referrer)
+        redirect_to = request.form.get("redirect_to") or request.headers.get("Referer", "/fieldpulse/jobs")
+
         if action == "start":
             query_db("UPDATE jobs SET status = 'in_progress', started_at = NOW() WHERE id = %s", (job_id,))
-            success = "Job started!"
-            job['status'] = 'in_progress'
+            return redirect(redirect_to)
 
         elif action == "complete":
             query_db("UPDATE jobs SET status = 'completed', completed_at = NOW() WHERE id = %s", (job_id,))
-            success = "Job completed!"
-            job['status'] = 'completed'
+            return redirect(redirect_to)
 
         elif action == "cancel":
             query_db("UPDATE jobs SET status = 'cancelled', updated_at = NOW() WHERE id = %s", (job_id,))
-            success = "Job cancelled."
-            job['status'] = 'cancelled'
+            return redirect(redirect_to)
 
         elif action == "update":
             # Update job details
