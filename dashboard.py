@@ -284,6 +284,61 @@ def get_crews_for_business(business_id):
     )
 
 
+def check_crew_availability(crew_id, scheduled_datetime, duration_min, business_id, exclude_job_id=None):
+    """Check if crew is available for a given time slot.
+
+    Returns (is_available, conflict_job) tuple.
+    is_available: True if crew is available, False if there's a conflict
+    conflict_job: Dict with job details if conflict exists, None otherwise
+    """
+    if not crew_id:
+        return True, None  # No crew assigned = always available
+
+    # Parse the scheduled datetime
+    try:
+        from datetime import datetime, timedelta
+        if isinstance(scheduled_datetime, str):
+            slot_start = datetime.strptime(scheduled_datetime, '%Y-%m-%d %H:%M:%S')
+        else:
+            slot_start = scheduled_datetime
+        slot_end = slot_start + timedelta(minutes=int(duration_min))
+    except Exception as e:
+        logger.error(f"Error parsing datetime in availability check: {e}")
+        return True, None  # Fail open on parse error
+
+    # Query for overlapping jobs
+    # An overlap occurs when:
+    # (job_start < slot_end) AND (job_end > slot_start)
+    exclude_clause = "AND j.id != %s" if exclude_job_id else ""
+    params = [crew_id, business_id, slot_start, slot_end, slot_start, slot_end]
+    if exclude_job_id:
+        params.append(exclude_job_id)
+
+    conflict = query_db("""
+        SELECT j.id, j.title, j.scheduled_date, j.estimated_duration_min,
+               j.customer_name, c.name as crew_name
+        FROM jobs j
+        LEFT JOIN crews c ON j.crew_id = c.id
+        WHERE j.crew_id = %s
+          AND j.business_id = %s
+          AND j.status NOT IN ('cancelled')
+          AND j.scheduled_date < %s
+          AND (j.scheduled_date + INTERVAL '1 minute' * j.estimated_duration_min) > %s
+        """ + exclude_clause + " LIMIT 1",
+        tuple(params),
+        one=True
+    )
+
+    if conflict:
+        # Calculate conflict job end time for display
+        conflict_start = conflict['scheduled_date']
+        conflict_end = conflict_start + timedelta(minutes=conflict['estimated_duration_min'])
+        conflict['end_date'] = conflict_end
+        return False, conflict
+
+    return True, None
+
+
 @cached_query("job_stats", ttl=10)
 def get_job_stats(business_id):
     """Get job statistics for dashboard - optimized single query."""
@@ -1082,18 +1137,32 @@ def fieldpulse_new_job():
             else:
                 scheduled_datetime = f"{scheduled_date} 09:00:00"
 
-            try:
-                query_db("""INSERT INTO jobs
-                    (business_id, title, description, customer_name, customer_phone, customer_email,
-                     address, city, scheduled_date, status, crew_id, estimated_duration_min)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'scheduled', %s, %s)""",
-                    (business_id, title, description, customer_name, customer_phone, customer_email,
-                     address, city, scheduled_datetime, crew_id if crew_id else None,
-                     int(estimated_duration) if estimated_duration else 60))
-                return redirect(url_for("fieldpulse_jobs"))
-            except Exception as e:
-                logger.error(f"Error creating job: {e}")
-                error = f"Error creating job: {str(e)}"
+            # Check crew availability
+            is_available, conflict = check_crew_availability(
+                crew_id if crew_id else None,
+                scheduled_datetime,
+                int(estimated_duration) if estimated_duration else 60,
+                business_id
+            )
+
+            if not is_available:
+                from datetime import timedelta
+                conflict_start = conflict['scheduled_date']
+                conflict_end = conflict_start + timedelta(minutes=conflict['estimated_duration_min'])
+                error = f"Crew is already booked during this time slot. Conflict: '{conflict['title']}' for {conflict['customer_name']} ({conflict_start.strftime('%I:%M %p')} - {conflict_end.strftime('%I:%M %p')})"
+            else:
+                try:
+                    query_db("""INSERT INTO jobs
+                        (business_id, title, description, customer_name, customer_phone, customer_email,
+                         address, city, scheduled_date, status, crew_id, estimated_duration_min)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'scheduled', %s, %s)""",
+                        (business_id, title, description, customer_name, customer_phone, customer_email,
+                         address, city, scheduled_datetime, crew_id if crew_id else None,
+                         int(estimated_duration) if estimated_duration else 60))
+                    return redirect(url_for("fieldpulse_jobs"))
+                except Exception as e:
+                    logger.error(f"Error creating job: {e}")
+                    error = f"Error creating job: {str(e)}"
 
     return render_template_string(f'''<!DOCTYPE html>
 <html lang="en" class="dark">
@@ -1376,15 +1445,30 @@ def fieldpulse_job_detail(job_id):
             else:
                 scheduled_datetime = job['scheduled_date']
 
-            try:
-                query_db("""UPDATE jobs SET title = %s, customer_name = %s, customer_phone = %s, customer_email = %s, address = %s, city = %s, scheduled_date = %s, crew_id = %s, estimated_duration_min = %s, description = %s, updated_at = NOW() WHERE id = %s""",
-                    (title or job['title'], customer_name or job['customer_name'], customer_phone or job['customer_phone'], customer_email or job['customer_email'], address or job['address'], city or job['city'], scheduled_datetime, crew_id if crew_id else None, int(estimated_duration) if estimated_duration else job['estimated_duration_min'], description or job['description'], job_id))
-                success = "Job updated successfully!"
-                # Refresh job data
-                job = query_db("SELECT j.*, c.name as crew_name FROM jobs j LEFT JOIN crews c ON j.crew_id = c.id WHERE j.id = %s AND j.business_id = %s", (job_id, business_id), one=True)
-            except Exception as e:
-                logger.error(f"Error updating job: {e}")
-                error = f"Error updating job: {str(e)}"
+            # Check crew availability (exclude current job from conflict check)
+            is_available, conflict = check_crew_availability(
+                crew_id if crew_id else None,
+                scheduled_datetime,
+                int(estimated_duration) if estimated_duration else job['estimated_duration_min'],
+                business_id,
+                exclude_job_id=job_id
+            )
+
+            if not is_available:
+                from datetime import timedelta
+                conflict_start = conflict['scheduled_date']
+                conflict_end = conflict_start + timedelta(minutes=conflict['estimated_duration_min'])
+                error = f"Crew is already booked during this time slot. Conflict: '{conflict['title']}' for {conflict['customer_name']} ({conflict_start.strftime('%I:%M %p')} - {conflict_end.strftime('%I:%M %p')})"
+            else:
+                try:
+                    query_db("""UPDATE jobs SET title = %s, customer_name = %s, customer_phone = %s, customer_email = %s, address = %s, city = %s, scheduled_date = %s, crew_id = %s, estimated_duration_min = %s, description = %s, updated_at = NOW() WHERE id = %s""",
+                        (title or job['title'], customer_name or job['customer_name'], customer_phone or job['customer_phone'], customer_email or job['customer_email'], address or job['address'], city or job['city'], scheduled_datetime, crew_id if crew_id else None, int(estimated_duration) if estimated_duration else job['estimated_duration_min'], description or job['description'], job_id))
+                    success = "Job updated successfully!"
+                    # Refresh job data
+                    job = query_db("SELECT j.*, c.name as crew_name FROM jobs j LEFT JOIN crews c ON j.crew_id = c.id WHERE j.id = %s AND j.business_id = %s", (job_id, business_id), one=True)
+                except Exception as e:
+                    logger.error(f"Error updating job: {e}")
+                    error = f"Error updating job: {str(e)}"
 
     # Status display and actions
     status_colors = {
