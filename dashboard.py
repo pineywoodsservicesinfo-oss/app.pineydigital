@@ -74,6 +74,42 @@ from modules.database import init_db, seed_leads_from_csv
 init_db()
 seed_leads_from_csv()
 
+# Seed FieldPulse demo data if empty
+def seed_fieldpulse_demo():
+    """Seed demo data for FieldPulse if users table is empty."""
+    try:
+        user_count = query_db("SELECT COUNT(*) as n FROM users", one=True)
+        if user_count and user_count.get('n', 0) == 0:
+            logger.info("Seeding FieldPulse demo data...")
+            # Insert business
+            query_db("""
+                INSERT INTO businesses (id, name, slug, email, phone, plan, active)
+                VALUES ('a1631c27-4b0d-4ecb-a684-2554c0acaa0e', 'Demo Landscaping Co', 'demo-landscaping',
+                        'owner@demolandscaping.com', '555-0100', 'trial', true)
+                ON CONFLICT (id) DO NOTHING
+            """)
+            # Insert user
+            query_db("""
+                INSERT INTO users (id, business_id, email, name, role, active)
+                VALUES ('634e6557-7baf-4894-8324-00058482c290', 'a1631c27-4b0d-4ecb-a684-2554c0acaa0e',
+                        'owner@demolandscaping.com', 'Demo Owner', 'owner', true)
+                ON CONFLICT (id) DO NOTHING
+            """)
+            # Insert sample job
+            query_db("""
+                INSERT INTO jobs (id, business_id, title, description, customer_name, customer_phone,
+                                  address, city, scheduled_date, status, estimated_duration_min)
+                VALUES ('749ede4e-e0d3-4822-9697-d86ad92bfc65', 'a1631c27-4b0d-4ecb-a684-2554c0acaa0e',
+                        'Lawn Maintenance - Oak St', 'Weekly lawn maintenance', 'Jane Smith',
+                        '555-1234', '123 Oak St', 'Springfield', NOW(), 'scheduled', 60)
+                ON CONFLICT (id) DO NOTHING
+            """)
+            logger.info("Demo data seeded successfully!")
+    except Exception as e:
+        logger.error(f"Failed to seed demo data: {e}")
+
+seed_fieldpulse_demo()
+
 # Register blueprints
 from modules.reviews_routes import reviews_bp
 from modules.bookings_routes import bookings_bp
@@ -491,6 +527,21 @@ def fieldpulse_dashboard():
         status_class = f"status-{job['status']}"
         date_str = job['scheduled_date'].strftime('%b %d') if hasattr(job['scheduled_date'], 'strftime') else str(job['scheduled_date'])[:10]
 
+        # Build quick action buttons based on status
+        quick_actions = ""
+        if job['status'] == 'scheduled':
+            quick_actions = f'''<form method="POST" action="/fieldpulse/jobs/{job['id']}" class="inline">
+                <input type="hidden" name="action" value="start">
+                <input type="hidden" name="redirect_to" value="/fieldpulse/dashboard">
+                <button type="submit" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-1 rounded font-medium transition">▶ Start</button>
+            </form>'''
+        elif job['status'] == 'in_progress':
+            quick_actions = f'''<form method="POST" action="/fieldpulse/jobs/{job['id']}" class="inline">
+                <input type="hidden" name="action" value="complete">
+                <input type="hidden" name="redirect_to" value="/fieldpulse/dashboard">
+                <button type="submit" class="text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded font-medium transition">✓ Complete</button>
+            </form>'''
+
         job_cards += f"""
         <div class="job-card bg-slate-800 rounded-xl p-5 border border-slate-700 fade-in">
             <div class="flex items-start justify-between mb-3">
@@ -503,20 +554,26 @@ def fieldpulse_dashboard():
                     {job['status'].replace('_', ' ').title()}
                 </span>
             </div>
-            <div class="flex items-center gap-4 text-sm text-slate-400">
-                <span class="flex items-center gap-1">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                    </svg>
-                    {date_str}
-                </span>
-                <span class="flex items-center gap-1">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                    </svg>
-                    {job.get('city', 'No location')}
-                </span>
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4 text-sm text-slate-400">
+                    <span class="flex items-center gap-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        {date_str}
+                    </span>
+                    <span class="flex items-center gap-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3  0 016 0z"/>
+                        </svg>
+                        {job.get('city', 'No location')}
+                    </span>
+                </div>
+                <div class="flex items-center gap-2">
+                    {quick_actions}
+                    <a href="/fieldpulse/jobs/{job['id']}" class="text-xs text-slate-400 hover:text-white px-2 py-1">Edit →</a>
+                </div>
             </div>
         </div>
         """
@@ -863,6 +920,23 @@ def fieldpulse_jobs():
         scheduled = str(job['scheduled_date'])[:16] if job['scheduled_date'] else 'Not scheduled'
         crew = job.get('crew_name') or 'Unassigned'
 
+        # Build quick action buttons based on status
+        quick_actions = ""
+        if job['status'] == 'scheduled':
+            quick_actions = f'''
+                <form method="POST" action="/fieldpulse/jobs/{job['id']}" class="inline">
+                    <input type="hidden" name="action" value="start">
+                    <input type="hidden" name="redirect_to" value="/fieldpulse/jobs">
+                    <button type="submit" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-1 rounded font-medium transition mr-2">▶ Start</button>
+                </form>'''
+        elif job['status'] == 'in_progress':
+            quick_actions = f'''
+                <form method="POST" action="/fieldpulse/jobs/{job['id']}" class="inline">
+                    <input type="hidden" name="action" value="complete">
+                    <input type="hidden" name="redirect_to" value="/fieldpulse/jobs">
+                    <button type="submit" class="text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded font-medium transition mr-2">✓ Complete</button>
+                </form>'''
+
         job_rows += f'''<tr class="border-t border-slate-700 hover:bg-slate-800/50">
             <td class="py-4 px-4">
                 <div class="font-medium text-white">{job.get('title', 'Untitled')}</div>
@@ -874,7 +948,8 @@ def fieldpulse_jobs():
             </td>
             <td class="py-4 px-4 text-slate-300">{crew}</td>
             <td class="py-4 px-4">
-                <a href="/fieldpulse/jobs/{job['id']}" class="text-emerald-400 hover:text-emerald-300 font-medium">Edit →</a>
+                {quick_actions}
+                <a href="/fieldpulse/jobs/{job['id']}" class="text-emerald-400 hover:text-emerald-300 font-medium text-xs">Edit →</a>
             </td>
         </tr>'''
 
@@ -1116,18 +1191,98 @@ def fieldpulse_new_job():
 
                     <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
                         <h3 class="text-lg font-medium text-white mb-4">Scheduling</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Date *</label>
-                                <input type="date" name="scheduled_date" required class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+
+                        <!-- Date Selection -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-slate-300 mb-3">Date *</label>
+                            <input type="date" name="scheduled_date" required
+                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-lg"
+                                style="color-scheme: dark;"
+                                min="{datetime.now().strftime('%Y-%m-%d')}">
+                            <p class="text-xs text-slate-500 mt-2">Click to open calendar • Minimum date is today</p>
+                        </div>
+
+                        <!-- Time Selection -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-slate-300 mb-3">Time</label>
+                            <div class="grid grid-cols-4 gap-2">
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="08:00" class="peer sr-only">
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        8:00 AM
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="09:00" class="peer sr-only" checked>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        9:00 AM
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="10:00" class="peer sr-only">
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        10:00 AM
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="11:00" class="peer sr-only">
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        11:00 AM
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="12:00" class="peer sr-only">
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        12:00 PM
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="13:00" class="peer sr-only">
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        1:00 PM
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="14:00" class="peer sr-only">
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        2:00 PM
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="15:00" class="peer sr-only">
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        3:00 PM
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="16:00" class="peer sr-only">
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        4:00 PM
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="17:00" class="peer sr-only">
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                        5:00 PM
+                                    </div>
+                                </label>
                             </div>
+                            <p class="text-xs text-slate-500 mt-2">9:00 AM selected by default</p>
+                        </div>
+
+                        <!-- Duration & Crew -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Time</label>
-                                <input type="time" name="scheduled_time" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Est. Duration (min)</label>
-                                <input type="number" name="estimated_duration" value="60" min="15" step="15" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Est. Duration</label>
+                                <select name="estimated_duration" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                    <option value="30">30 minutes</option>
+                                    <option value="60" selected>1 hour</option>
+                                    <option value="90">1.5 hours</option>
+                                    <option value="120">2 hours</option>
+                                    <option value="180">3 hours</option>
+                                    <option value="240">4 hours</option>
+                                    <option value="480">Full day (8 hours)</option>
+                                </select>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Crew</label>
@@ -1184,20 +1339,20 @@ def fieldpulse_job_detail(job_id):
     if request.method == "POST":
         action = request.form.get("action", "")
 
+        # Get redirect destination (from hidden field or referrer)
+        redirect_to = request.form.get("redirect_to") or request.headers.get("Referer", "/fieldpulse/jobs")
+
         if action == "start":
             query_db("UPDATE jobs SET status = 'in_progress', started_at = NOW() WHERE id = %s", (job_id,))
-            success = "Job started!"
-            job['status'] = 'in_progress'
+            return redirect(redirect_to)
 
         elif action == "complete":
             query_db("UPDATE jobs SET status = 'completed', completed_at = NOW() WHERE id = %s", (job_id,))
-            success = "Job completed!"
-            job['status'] = 'completed'
+            return redirect(redirect_to)
 
         elif action == "cancel":
             query_db("UPDATE jobs SET status = 'cancelled', updated_at = NOW() WHERE id = %s", (job_id,))
-            success = "Job cancelled."
-            job['status'] = 'cancelled'
+            return redirect(redirect_to)
 
         elif action == "update":
             # Update job details
@@ -1362,18 +1517,75 @@ def fieldpulse_job_detail(job_id):
                     <!-- Scheduling -->
                     <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
                         <h3 class="text-lg font-medium text-white mb-4">Scheduling</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Date</label>
-                                <input type="date" name="scheduled_date" value="{date_str}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+
+                        <!-- Date Selection -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-slate-300 mb-3">Date</label>
+                            <input type="date" name="scheduled_date" value="{date_str}" required
+                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-lg"
+                                style="color-scheme: dark;">
+                        </div>
+
+                        <!-- Time Selection -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-slate-300 mb-3">Time</label>
+                            <div class="grid grid-cols-4 gap-2">
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="08:00" class="peer sr-only" {'checked' if time_str == '08:00' else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">8:00 AM</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="09:00" class="peer sr-only" {'checked' if time_str == '09:00' or not time_str else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">9:00 AM</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="10:00" class="peer sr-only" {'checked' if time_str == '10:00' else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">10:00 AM</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="11:00" class="peer sr-only" {'checked' if time_str == '11:00' else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">11:00 AM</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="12:00" class="peer sr-only" {'checked' if time_str == '12:00' else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">12:00 PM</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="13:00" class="peer sr-only" {'checked' if time_str == '13:00' else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">1:00 PM</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="14:00" class="peer sr-only" {'checked' if time_str == '14:00' else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">2:00 PM</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="15:00" class="peer sr-only" {'checked' if time_str == '15:00' else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">3:00 PM</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="16:00" class="peer sr-only" {'checked' if time_str == '16:00' else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">4:00 PM</div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="scheduled_time" value="17:00" class="peer sr-only" {'checked' if time_str == '17:00' else ''}>
+                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">5:00 PM</div>
+                                </label>
                             </div>
+                        </div>
+
+                        <!-- Duration & Crew -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Time</label>
-                                <input type="time" name="scheduled_time" value="{time_str}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Est. Duration (min)</label>
-                                <input type="number" name="estimated_duration" value="{job.get('estimated_duration_min', 60)}" min="15" step="15" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Est. Duration</label>
+                                <select name="estimated_duration" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                    <option value="30" {'selected' if job.get('estimated_duration_min') == 30 else ''}>30 minutes</option>
+                                    <option value="60" {'selected' if job.get('estimated_duration_min', 60) == 60 else ''}>1 hour</option>
+                                    <option value="90" {'selected' if job.get('estimated_duration_min') == 90 else ''}>1.5 hours</option>
+                                    <option value="120" {'selected' if job.get('estimated_duration_min') == 120 else ''}>2 hours</option>
+                                    <option value="180" {'selected' if job.get('estimated_duration_min') == 180 else ''}>3 hours</option>
+                                    <option value="240" {'selected' if job.get('estimated_duration_min') == 240 else ''}>4 hours</option>
+                                    <option value="480" {'selected' if job.get('estimated_duration_min') == 480 else ''}>Full day (8 hours)</option>
+                                </select>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Crew</label>
