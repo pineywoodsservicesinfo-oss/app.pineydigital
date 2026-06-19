@@ -527,6 +527,19 @@ def fieldpulse_dashboard():
         status_class = f"status-{job['status']}"
         date_str = job['scheduled_date'].strftime('%b %d') if hasattr(job['scheduled_date'], 'strftime') else str(job['scheduled_date'])[:10]
 
+        # Build quick action buttons based on status
+        quick_actions = ""
+        if job['status'] == 'scheduled':
+            quick_actions = f'''<form method="POST" action="/fieldpulse/jobs/{job['id']}" class="inline">
+                <input type="hidden" name="action" value="start">
+                <button type="submit" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-1 rounded font-medium transition">▶ Start</button>
+            </form>'''
+        elif job['status'] == 'in_progress':
+            quick_actions = f'''<form method="POST" action="/fieldpulse/jobs/{job['id']}" class="inline">
+                <input type="hidden" name="action" value="complete">
+                <button type="submit" class="text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded font-medium transition">✓ Complete</button>
+            </form>'''
+
         job_cards += f"""
         <div class="job-card bg-slate-800 rounded-xl p-5 border border-slate-700 fade-in">
             <div class="flex items-start justify-between mb-3">
@@ -539,20 +552,26 @@ def fieldpulse_dashboard():
                     {job['status'].replace('_', ' ').title()}
                 </span>
             </div>
-            <div class="flex items-center gap-4 text-sm text-slate-400">
-                <span class="flex items-center gap-1">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                    </svg>
-                    {date_str}
-                </span>
-                <span class="flex items-center gap-1">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                    </svg>
-                    {job.get('city', 'No location')}
-                </span>
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4 text-sm text-slate-400">
+                    <span class="flex items-center gap-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        {date_str}
+                    </span>
+                    <span class="flex items-center gap-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3  0 016 0z"/>
+                        </svg>
+                        {job.get('city', 'No location')}
+                    </span>
+                </div>
+                <div class="flex items-center gap-2">
+                    {quick_actions}
+                    <a href="/fieldpulse/jobs/{job['id']}" class="text-xs text-slate-400 hover:text-white px-2 py-1">Edit →</a>
+                </div>
             </div>
         </div>
         """
@@ -899,6 +918,21 @@ def fieldpulse_jobs():
         scheduled = str(job['scheduled_date'])[:16] if job['scheduled_date'] else 'Not scheduled'
         crew = job.get('crew_name') or 'Unassigned'
 
+        # Build quick action buttons based on status
+        quick_actions = ""
+        if job['status'] == 'scheduled':
+            quick_actions = f'''
+                <form method="POST" action="/fieldpulse/jobs/{job['id']}" class="inline">
+                    <input type="hidden" name="action" value="start">
+                    <button type="submit" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-1 rounded font-medium transition mr-2">▶ Start</button>
+                </form>'''
+        elif job['status'] == 'in_progress':
+            quick_actions = f'''
+                <form method="POST" action="/fieldpulse/jobs/{job['id']}" class="inline">
+                    <input type="hidden" name="action" value="complete">
+                    <button type="submit" class="text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded font-medium transition mr-2">✓ Complete</button>
+                </form>'''
+
         job_rows += f'''<tr class="border-t border-slate-700 hover:bg-slate-800/50">
             <td class="py-4 px-4">
                 <div class="font-medium text-white">{job.get('title', 'Untitled')}</div>
@@ -910,7 +944,8 @@ def fieldpulse_jobs():
             </td>
             <td class="py-4 px-4 text-slate-300">{crew}</td>
             <td class="py-4 px-4">
-                <a href="/fieldpulse/jobs/{job['id']}" class="text-emerald-400 hover:text-emerald-300 font-medium">Edit →</a>
+                {quick_actions}
+                <a href="/fieldpulse/jobs/{job['id']}" class="text-emerald-400 hover:text-emerald-300 font-medium text-xs">Edit →</a>
             </td>
         </tr>'''
 
