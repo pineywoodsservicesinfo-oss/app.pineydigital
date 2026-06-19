@@ -35,6 +35,9 @@ flask==3.0.3
 # Production server
 gunicorn>=21.0.0
 
+# PostgreSQL support
+psycopg2-binary>=2.9.0
+
 # QR code generation
 qrcode>=7.0.0
 Pillow>=10.0.0
