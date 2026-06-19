@@ -1,0 +1,1396 @@
+#!/usr/bin/env python3
+"""
+dashboard.py — FieldPulse Field Service Management
+Cleaned up version - focuses on SaaS functionality
+
+Run with: python dashboard.py
+Visit:    http://localhost:5000/fieldpulse
+
+Features:
+  - Business management
+  - Job scheduling
+  - Crew management
+  - Customer portal
+  - PostgreSQL multi-tenant
+"""
+
+import os
+import sys
+import json
+import sqlite3
+import logging
+from datetime import datetime, timedelta
+from pathlib import Path
+from functools import wraps
+from flask import (Flask, render_template_string, redirect,
+                   url_for, request, session, jsonify)
+
+logger = logging.getLogger(__name__)
+
+# ── Call Scheduler State ─────────────────────────────────────
+_call_scheduler_running = False
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+# Load environment variables FIRST (before any DB imports)
+from modules.utils import load_env
+load_env()
+
+# Import database configuration AFTER loading env
+from migrations.db_config import db_config, get_db_connection
+
+# Import security modules
+from modules.security import (
+    generate_csrf_token, validate_csrf_token,
+    get_security_headers
+)
+
+app = Flask(__name__)
+
+# Security: Require these to be set in environment
+DASHBOARD_SECRET = os.environ.get("DASHBOARD_SECRET")
+DASHBOARD_PASS = os.environ.get("DASHBOARD_PASSWORD")
+
+if not DASHBOARD_SECRET:
+    print("WARNING: DASHBOARD_SECRET not set. Generating temporary secret.")
+    import secrets
+    DASHBOARD_SECRET = secrets.token_hex(32)
+
+if not DASHBOARD_PASS:
+    print("WARNING: DASHBOARD_PASSWORD not set. Using insecure default. Set DASHBOARD_PASSWORD in .env!")
+    DASHBOARD_PASS = "CHANGE_ME"
+
+app.secret_key = DASHBOARD_SECRET
+
+# Database path - use db_config for SQLite or PostgreSQL support
+if db_config.is_sqlite:
+    DB_PATH = db_config.get_sqlite_path()
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+else:
+    DB_PATH = None
+
+# Initialize all tables
+from modules.database import init_db, seed_leads_from_csv
+init_db()
+seed_leads_from_csv()
+
+# Register blueprints
+from modules.reviews_routes import reviews_bp
+from modules.bookings_routes import bookings_bp
+from modules.bookings_routes_public import public_bookings_bp
+from modules.bookings_self_service import self_service_bp
+from modules.referrals_routes import referrals_bp
+
+app.register_blueprint(reviews_bp)
+app.register_blueprint(bookings_bp)
+app.register_blueprint(public_bookings_bp)
+app.register_blueprint(self_service_bp)
+app.register_blueprint(referrals_bp)
+
+
+# ═════════════════════════════════════════════════════════════════
+# DATABASE HELPERS
+# ═════════════════════════════════════════════════════════════════
+
+def query_db(sql, params=(), one=False):
+    """
+    Execute a SQL query against SQLite or PostgreSQL.
+    Automatically uses the correct database based on DATABASE_TYPE.
+    Handles both SELECT queries and WRITE operations (INSERT/UPDATE/DELETE).
+    Uses connection pooling for PostgreSQL.
+    """
+    try:
+        from migrations.db_config import get_db_connection, release_db_connection
+
+        conn = get_db_connection()
+        is_write = sql.strip().upper().startswith(('INSERT', 'UPDATE', 'DELETE', 'CREATE', 'ALTER', 'DROP'))
+
+        if db_config.is_postgres:
+            from psycopg2.extras import RealDictCursor
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            pg_sql = sql.replace('?', '%s')
+            cursor.execute(pg_sql, params)
+
+            if is_write:
+                conn.commit()
+                cursor.close()
+                release_db_connection(conn)
+                return None
+
+            rows = cursor.fetchall()
+            cursor.close()
+            release_db_connection(conn)
+            if one:
+                return dict(rows[0]) if rows else None
+            return [dict(row) for row in rows]
+        else:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(sql, params)
+
+            if is_write:
+                conn.commit()
+                cursor.close()
+                release_db_connection(conn)
+                return None
+
+            rows = cursor.fetchall()
+            cursor.close()
+            release_db_connection(conn)
+            if one:
+                return rows[0] if rows else None
+            return rows
+
+    except Exception as e:
+        logger.error(f"Database query error: {e}")
+        return None if one else []
+
+
+# ═════════════════════════════════════════════════════════════════
+# AUTH DECORATORS
+# ═════════════════════════════════════════════════════════════════
+
+def login_required(f):
+    """Admin login decorator."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def fp_login_required(f):
+    """FieldPulse login decorator - checks business session."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("fp_logged_in"):
+            return redirect(url_for("fieldpulse_login"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ═════════════════════════════════════════════════════════════════
+# FIELD PULSE HELPER FUNCTIONS
+# ═════════════════════════════════════════════════════════════════
+
+# Simple in-memory cache for expensive queries
+_cache = {}
+_cache_times = {}
+CACHE_TTL = 30  # seconds
+
+def cached_query(key_prefix, ttl=CACHE_TTL):
+    """Decorator to cache function results."""
+    def decorator(f):
+        def wrapper(*args, **kwargs):
+            cache_key = f"{key_prefix}:{args}"
+            now = datetime.now().timestamp()
+
+            # Check cache
+            if cache_key in _cache:
+                if now - _cache_times.get(cache_key, 0) < ttl:
+                    return _cache[cache_key]
+
+            # Execute and cache
+            result = f(*args, **kwargs)
+            _cache[cache_key] = result
+            _cache_times[cache_key] = now
+            return result
+        return wrapper
+    return decorator
+
+def clear_cache():
+    """Clear all cached data."""
+    _cache.clear()
+    _cache_times.clear()
+
+def get_business_from_session():
+    """Get current business from session."""
+    business_id = session.get("fp_business_id")
+    if not business_id:
+        return None
+    return query_db(
+        "SELECT * FROM businesses WHERE id = %s",
+        (business_id,),
+        one=True
+    )
+
+
+def get_jobs_for_business(business_id, status=None, limit=10):
+    """Get jobs for a business with optional status filter."""
+    if status:
+        return query_db(
+            """SELECT j.*, c.name as crew_name
+               FROM jobs j
+               LEFT JOIN crews c ON j.crew_id = c.id
+               WHERE j.business_id = %s AND j.status = %s
+               ORDER BY j.scheduled_date DESC
+               LIMIT %s""",
+            (business_id, status, limit)
+        )
+    return query_db(
+        """SELECT j.*, c.name as crew_name
+           FROM jobs j
+           LEFT JOIN crews c ON j.crew_id = c.id
+           WHERE j.business_id = %s
+           ORDER BY j.scheduled_date DESC
+           LIMIT %s""",
+        (business_id, limit)
+    )
+
+
+@cached_query("crews", ttl=60)
+def get_crews_for_business(business_id):
+    """Get crews for a business."""
+    return query_db(
+        "SELECT * FROM crews WHERE business_id = %s AND active = true",
+        (business_id,)
+    )
+
+
+@cached_query("job_stats", ttl=10)
+def get_job_stats(business_id):
+    """Get job statistics for dashboard - optimized single query."""
+    today = datetime.now().date()
+    this_week_start = today - timedelta(days=today.weekday())
+
+    # Single query to get all stats
+    stats = query_db(
+        """SELECT
+            COUNT(*) FILTER (WHERE scheduled_date::date = %s) as today,
+            COUNT(*) FILTER (WHERE scheduled_date >= %s) as this_week,
+            COUNT(*) FILTER (WHERE status = 'scheduled') as scheduled,
+            COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
+            COUNT(*) FILTER (WHERE status = 'completed') as completed,
+            COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled
+           FROM jobs
+           WHERE business_id = %s""",
+        (today, this_week_start, business_id),
+        one=True
+    )
+
+    return {
+        'today': stats.get('today', 0) if stats else 0,
+        'this_week': stats.get('this_week', 0) if stats else 0,
+        'scheduled': stats.get('scheduled', 0) if stats else 0,
+        'in_progress': stats.get('in_progress', 0) if stats else 0,
+        'completed': stats.get('completed', 0) if stats else 0,
+        'cancelled': stats.get('cancelled', 0) if stats else 0,
+    }
+
+
+# ═════════════════════════════════════════════════════════════════
+# FIELD PULSE TEMPLATES & STYLES
+# ═════════════════════════════════════════════════════════════════
+
+TAILWIND_CDN = """
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+    darkMode: 'class',
+    theme: {
+        extend: {
+            colors: {
+                primary: {
+                    50: '#ecfdf5',
+                    100: '#d1fae5',
+                    200: '#a7f3d0',
+                    300: '#6ee7b7',
+                    400: '#34d399',
+                    500: '#10b981',
+                    600: '#059669',
+                    700: '#047857',
+                    800: '#065f46',
+                    900: '#064e3b',
+                }
+            }
+        }
+    }
+}
+</script>"""
+
+FIELD_PULSE_CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+body{font-family:'Inter',sans-serif;}
+.fade-in{animation:fadeIn 0.3s ease-in}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.slide-in{animation:slideIn 0.3s ease-out}
+@keyframes slideIn{from{transform:translateX(-20px);opacity:0}to{transform:translateX(0);opacity:1}}
+.status-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:9999px;font-size:12px;font-weight:500}
+.status-scheduled{background:#dbeafe;color:#1e40af}
+.status-in_progress{background:#fef3c7;color:#92400e}
+.status-completed{background:#d1fae5;color:#065f46}
+.status-cancelled{background:#fee2e2;color:#991b1b}
+.job-card{transition:all 0.2s}
+.job-card:hover{transform:translateY(-2px);box-shadow:0 10px 40px -10px rgba(0,0,0,0.15)}
+.sidebar-link{transition:all 0.15s}
+.sidebar-link:hover{background:rgba(255,255,255,0.05)}
+.sidebar-link.active{background:linear-gradient(90deg,#10b98120 0%,transparent 100%);border-right:3px solid #10b981}
+</style>"""
+
+
+# ═════════════════════════════════════════════════════════════════
+# FIELD PULSE ROUTES
+# ═════════════════════════════════════════════════════════════════
+
+@app.route("/fieldpulse")
+def fieldpulse_redirect():
+    """Redirect to FieldPulse dashboard."""
+    return redirect(url_for("fieldpulse_dashboard"))
+
+
+@app.route("/fieldpulse/login", methods=["GET", "POST"])
+def fieldpulse_login():
+    """FieldPulse business login."""
+    error = ""
+
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+
+        # Find user by email
+        user = query_db(
+            "SELECT * FROM users WHERE email = %s",
+            (email,),
+            one=True
+        )
+
+        if user and password == "demo123":
+            session["fp_logged_in"] = True
+            session["fp_user_id"] = user['id']
+            session["fp_business_id"] = user['business_id']
+            session["fp_user_name"] = user.get('name', email.split('@')[0])
+
+            # Update last login
+            query_db(
+                "UPDATE users SET last_login_at = NOW() WHERE id = %s",
+                (user['id'],)
+            )
+
+            return redirect(url_for("fieldpulse_dashboard"))
+        else:
+            error = "Invalid email or password."
+
+    return render_template_string(f"""<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldPulse — Login</title>
+    {TAILWIND_CDN}
+    {FIELD_PULSE_CSS}
+</head>
+<body class="bg-slate-900 min-h-screen flex items-center justify-center">
+    <div class="w-full max-w-md px-6">
+        <div class="bg-slate-800 rounded-2xl shadow-2xl p-8 fade-in">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl mx-auto mb-4 flex items-center justify-center">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <h1 class="text-2xl font-bold text-white">FieldPulse</h1>
+                <p class="text-slate-400 mt-1">Field Service Management</p>
+            </div>
+
+            {f'<div class="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">{error}</div>' if error else ''}
+
+            <form method="POST" class="space-y-5">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Email</label>
+                    <input type="email" name="email" required
+                        class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
+                        placeholder="owner@company.com"
+                        value="owner@demolandscaping.com">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Password</label>
+                    <input type="password" name="password" required
+                        class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
+                        placeholder="••••••••">
+                    <p class="text-xs text-slate-500 mt-2">Demo password: <code class="text-emerald-400">demo123</code></p>
+                </div>
+
+                <button type="submit"
+                    class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition shadow-lg shadow-emerald-500/25">
+                    Sign In
+                </button>
+            </form>
+
+            <p class="text-center text-slate-500 text-sm mt-6">
+                Don't have an account? <a href="#" class="text-emerald-400 hover:text-emerald-300">Start free trial</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>""")
+
+
+def get_dashboard_data(business_id):
+    """Get all dashboard data in a single database connection."""
+    from migrations.db_config import get_db_connection, release_db_connection
+    from psycopg2.extras import RealDictCursor
+    from datetime import datetime, timedelta
+
+    today = datetime.now().date()
+    this_week_start = today - timedelta(days=today.weekday())
+
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+    try:
+        # Get stats
+        cursor.execute("""SELECT
+            COUNT(*) FILTER (WHERE scheduled_date::date = %s) as today,
+            COUNT(*) FILTER (WHERE scheduled_date >= %s) as this_week,
+            COUNT(*) FILTER (WHERE status = 'scheduled') as scheduled,
+            COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
+            COUNT(*) FILTER (WHERE status = 'completed') as completed,
+            COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled
+           FROM jobs WHERE business_id = %s""",
+            (today, this_week_start, business_id))
+        stats_row = cursor.fetchone()
+        stats = dict(stats_row) if stats_row else {}
+
+        # Get recent jobs
+        cursor.execute("""SELECT j.*, c.name as crew_name
+           FROM jobs j LEFT JOIN crews c ON j.crew_id = c.id
+           WHERE j.business_id = %s
+           ORDER BY j.scheduled_date DESC
+           LIMIT 5""", (business_id,))
+        recent_jobs = [dict(row) for row in cursor.fetchall()]
+
+        # Get crews
+        cursor.execute("SELECT * FROM crews WHERE business_id = %s AND active = true",
+                      (business_id,))
+        crews = [dict(row) for row in cursor.fetchall()]
+
+        return stats, recent_jobs, crews
+    finally:
+        cursor.close()
+        release_db_connection(conn)
+
+
+@app.route("/fieldpulse/dashboard")
+@fp_login_required
+def fieldpulse_dashboard():
+    """Main FieldPulse dashboard."""
+    business = get_business_from_session()
+    if not business:
+        return redirect(url_for("fieldpulse_logout"))
+
+    business_id = business['id']
+    stats, recent_jobs, crews = get_dashboard_data(business_id)
+    user_name = session.get("fp_user_name", "User")
+
+    # Build job cards HTML
+    job_cards = ""
+    for job in (recent_jobs or []):
+        status_class = f"status-{job['status']}"
+        date_str = job['scheduled_date'].strftime('%b %d') if hasattr(job['scheduled_date'], 'strftime') else str(job['scheduled_date'])[:10]
+
+        job_cards += f"""
+        <div class="job-card bg-slate-800 rounded-xl p-5 border border-slate-700 fade-in">
+            <div class="flex items-start justify-between mb-3">
+                <div>
+                    <h3 class="font-semibold text-white">{job.get('title', 'Untitled Job')}</h3>
+                    <p class="text-sm text-slate-400 mt-1">{job.get('customer_name', 'Unknown Customer')}</p>
+                </div>
+                <span class="status-badge {status_class}">
+                    <span class="w-2 h-2 rounded-full bg-current"></span>
+                    {job['status'].replace('_', ' ').title()}
+                </span>
+            </div>
+            <div class="flex items-center gap-4 text-sm text-slate-400">
+                <span class="flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    {date_str}
+                </span>
+                <span class="flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    {job.get('city', 'No location')}
+                </span>
+            </div>
+        </div>
+        """
+
+    # Build crew cards
+    crew_cards = ""
+    for crew in (crews or []):
+        crew_cards += f"""
+        <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-semibold">
+                {crew.get('name', 'C')[:1]}
+            </div>
+            <div>
+                <h4 class="font-medium text-white">{crew.get('name', 'Unnamed Crew')}</h4>
+                <p class="text-sm text-slate-400">Active crew</p>
+            </div>
+        </div>
+        """
+
+    return render_template_string(f"""<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldPulse — Dashboard</title>
+    {TAILWIND_CDN}
+    {FIELD_PULSE_CSS}
+</head>
+<body class="bg-slate-900 text-white">
+    <div class="flex min-h-screen">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-slate-950 border-r border-slate-800 fixed h-full">
+            <div class="p-6">
+                <div class="flex items-center gap-3 mb-8">
+                    <div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg">FieldPulse</h1>
+                        <p class="text-xs text-slate-500">{business.get('name', 'Business')}</p>
+                    </div>
+                </div>
+
+                <nav class="space-y-1">
+                    <a href="/fieldpulse/dashboard" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+                        </svg>
+                        Dashboard
+                    </a>
+                    <a href="/fieldpulse/jobs" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                        Jobs
+                    </a>
+                    <a href="#" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        Schedule
+                    </a>
+                    <a href="#" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        Crews
+                    </a>
+                </nav>
+            </div>
+
+            <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
+                <div class="flex items-center gap-3 px-4 py-2">
+                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium">
+                        {user_name[:1].upper()}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-white truncate">{user_name}</p>
+                        <p class="text-xs text-slate-500 truncate">{business.get('subscription_tier', 'Starter').title()} Plan</p>
+                    </div>
+                    <a href="/fieldpulse/logout" class="text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 ml-64">
+            <header class="bg-slate-900 border-b border-slate-800 px-8 py-4 sticky top-0 z-10">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xl font-semibold">Dashboard</h2>
+                    <div class="flex items-center gap-4">
+                        <span class="px-3 py-1 bg-emerald-500/10 text-emerald-400 text-sm rounded-full border border-emerald-500/20">
+                            Trial ends in 13 days
+                        </span>
+                        <button class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+                            + New Job
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="p-8">
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <div class="flex items-center justify-between mb-2">
+                            <p class="text-slate-400 text-sm">Today's Jobs</p>
+                            <span class="text-emerald-400 text-xs font-medium">+2</span>
+                        </div>
+                        <p class="text-3xl font-bold text-white">{stats['today']}</p>
+                        <p class="text-slate-500 text-sm mt-1">Scheduled today</p>
+                    </div>
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <div class="flex items-center justify-between mb-2">
+                            <p class="text-slate-400 text-sm">This Week</p>
+                            <span class="text-emerald-400 text-xs font-medium">+12%</span>
+                        </div>
+                        <p class="text-3xl font-bold text-white">{stats['this_week']}</p>
+                        <p class="text-slate-500 text-sm mt-1">Total scheduled</p>
+                    </div>
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <div class="flex items-center justify-between mb-2">
+                            <p class="text-slate-400 text-sm">In Progress</p>
+                            <span class="w-2 h-2 bg-amber-400 rounded-full"></span>
+                        </div>
+                        <p class="text-3xl font-bold text-white">{stats['in_progress']}</p>
+                        <p class="text-slate-500 text-sm mt-1">Active jobs</p>
+                    </div>
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <div class="flex items-center justify-between mb-2">
+                            <p class="text-slate-400 text-sm">Completed</p>
+                            <span class="w-2 h-2 bg-emerald-400 rounded-full"></span>
+                        </div>
+                        <p class="text-3xl font-bold text-white">{stats['completed']}</p>
+                        <p class="text-slate-500 text-sm mt-1">This month</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Recent Jobs -->
+                    <div class="lg:col-span-2">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-lg font-semibold">Recent Jobs</h3>
+                            <a href="/fieldpulse/jobs" class="text-emerald-400 hover:text-emerald-300 text-sm">View all →</a>
+                        </div>
+                        <div class="space-y-4">
+                            {job_cards if job_cards else '<p class="text-slate-500 text-center py-8">No jobs yet. Create your first job!</p>'}
+                        </div>
+                    </div>
+
+                    <!-- Crews & Quick Actions -->
+                    <div class="space-y-6">
+                        <div>
+                            <h3 class="text-lg font-semibold mb-4">Your Crews</h3>
+                            <div class="space-y-3">
+                                {crew_cards if crew_cards else '<p class="text-slate-500 text-sm">No crews configured</p>'}
+                            </div>
+                        </div>
+
+                        <div class="bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 rounded-xl p-6 border border-emerald-500/20">
+                            <h4 class="font-semibold text-white mb-2">Professional Plan</h4>
+                            <p class="text-slate-400 text-sm mb-4">You're on a 14-day trial. Upgrade to unlock all features.</p>
+                            <button class="w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition">
+                                Upgrade Now
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>""")
+
+
+@app.route("/fieldpulse/logout")
+def fieldpulse_logout():
+    """Logout from FieldPulse."""
+    session.pop("fp_logged_in", None)
+    session.pop("fp_user_id", None)
+    session.pop("fp_business_id", None)
+    session.pop("fp_user_name", None)
+    return redirect(url_for("fieldpulse_login"))
+
+
+# ═════════════════════════════════════════════════════════════════
+# ADMIN AUTH ROUTES
+# ═════════════════════════════════════════════════════════════════
+
+@app.route("/login", methods=["GET","POST"])
+def login():
+    """Admin login with email + password."""
+    error = ""
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        admin_email = os.environ.get("ADMIN_EMAIL", "joel@pineydigital.com").lower()
+
+        if email != admin_email:
+            error = "Invalid credentials."
+        elif password != DASHBOARD_PASS:
+            error = "Invalid credentials."
+        else:
+            session["logged_in"] = True
+            return redirect(url_for("overview"))
+
+    return render_template_string(f"""<!DOCTYPE html>
+<html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin Login</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center}}
+.card{{background:#1e293b;padding:40px;border-radius:12px;max-width:360px;width:90%}}
+h1{{margin-bottom:24px}}
+input{{width:100%;padding:12px;margin-bottom:16px;border:1px solid #334155;border-radius:6px;background:#0f172a;color:#fff}}
+button{{width:100%;padding:12px;background:#10b981;color:#fff;border:none;border-radius:6px;cursor:pointer}}
+.error{{color:#ef4444;margin-bottom:16px}}
+</style></head><body>
+<div class="card">
+<h1>Admin Login</h1>
+{f'<p class="error">{error}</p>' if error else ''}
+<form method="POST">
+<input type="email" name="email" placeholder="Email" required>
+<input type="password" name="password" placeholder="Password" required>
+<button type="submit">Sign In</button>
+</form>
+</div></body></html>""")
+
+
+@app.route("/logout")
+def logout():
+    """Admin logout."""
+    session.pop("logged_in", None)
+    return redirect(url_for("login"))
+
+
+# ═════════════════════════════════════════════════════════════════
+# HEALTH & ERROR HANDLERS
+# ═════════════════════════════════════════════════════════════════
+
+@app.route("/health")
+def health_check():
+    """Health check endpoint for Railway monitoring."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        if db_config.is_postgres:
+            cursor.execute("SELECT 1")
+        else:
+            cursor.execute("SELECT 1")
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "status": "healthy",
+            "database": "connected",
+            "db_type": db_config.db_type
+        }), 200
+    except Exception as e:
+        return jsonify({"status": "unhealthy", "error": str(e)}), 500
+
+
+@app.errorhandler(404)
+def not_found(error):
+    """Handle 404 errors."""
+    return render_template_string("""<!DOCTYPE html>
+<html><head><title>404 — Not Found</title>
+<style>body{{font-family:sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center}}</style>
+</head><body><div><h1>404</h1><p>Page not found</p><a href="/fieldpulse" style="color:#10b981">← Go to Dashboard</a></div></body></html>"""), 404
+
+
+@app.errorhandler(500)
+def server_error(error):
+    """Handle 500 errors."""
+    logger.error(f"500 error: {error}")
+    return render_template_string("""<!DOCTYPE html>
+<html><head><title>500 — Server Error</title>
+<style>body{{font-family:sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center}}</style>
+</head><body><div><h1>500</h1><p>Server error</p><a href="/fieldpulse" style="color:#10b981">← Go to Dashboard</a></div></body></html>"""), 500
+
+
+# ═════════════════════════════════════════════════════════════════
+# RUN
+# ═════════════════════════════════════════════════════════════════
+
+if __name__ == "__main__":
+    port = int(os.environ.get("DASHBOARD_PORT", 5000))
+    print(f"\n  FieldPulse Dashboard")
+    print(f"  Running at: http://localhost:{port}")
+    print(f"  Login:      http://localhost:{port}/fieldpulse/login\n")
+    app.run(host="0.0.0.0", port=port, debug=False)
+
+# ═════════════════════════════════════════════════════════════════
+# FIELD PULSE JOB ROUTES
+# ═════════════════════════════════════════════════════════════════
+
+@app.route("/fieldpulse/jobs")
+@fp_login_required
+def fieldpulse_jobs():
+    """Job list page."""
+    business = get_business_from_session()
+    if not business:
+        return redirect(url_for("fieldpulse_logout"))
+
+    business_id = business['id']
+    status_filter = request.args.get("status", "")
+
+    # Get jobs with optional status filter
+    if status_filter:
+        jobs = query_db(
+            """SELECT j.*, c.name as crew_name
+               FROM jobs j LEFT JOIN crews c ON j.crew_id = c.id
+               WHERE j.business_id = %s AND j.status = %s
+               ORDER BY j.scheduled_date ASC""",
+            (business_id, status_filter)
+        )
+    else:
+        jobs = query_db(
+            """SELECT j.*, c.name as crew_name
+               FROM jobs j LEFT JOIN crews c ON j.crew_id = c.id
+               WHERE j.business_id = %s
+               ORDER BY j.scheduled_date ASC""",
+            (business_id,)
+        )
+
+    # Build job rows
+    job_rows = ""
+    status_colors = {
+        'scheduled': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+        'in_progress': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+        'completed': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+        'cancelled': 'bg-red-500/10 text-red-400 border-red-500/20'
+    }
+
+    for job in (jobs or []):
+        status_class = status_colors.get(job['status'], 'bg-slate-700 text-slate-400')
+        status_text = job['status'].replace('_', ' ').title()
+        scheduled = str(job['scheduled_date'])[:16] if job['scheduled_date'] else 'Not scheduled'
+        crew = job.get('crew_name') or 'Unassigned'
+
+        job_rows += f'''<tr class="border-t border-slate-700 hover:bg-slate-800/50">
+            <td class="py-4 px-4">
+                <div class="font-medium text-white">{job.get('title', 'Untitled')}</div>
+                <div class="text-sm text-slate-500">{job.get('customer_name', 'No customer')}</div>
+            </td>
+            <td class="py-4 px-4 text-slate-300">{scheduled}</td>
+            <td class="py-4 px-4">
+                <span class="px-2 py-1 rounded text-xs font-medium border {status_class}">{status_text}</span>
+            </td>
+            <td class="py-4 px-4 text-slate-300">{crew}</td>
+            <td class="py-4 px-4">
+                <a href="/fieldpulse/jobs/{job['id']}" class="text-emerald-400 hover:text-emerald-300 font-medium">Edit →</a>
+            </td>
+        </tr>'''
+
+    if not job_rows:
+        job_rows = '<tr><td colspan="5" class="py-8 text-center text-slate-500">No jobs found. Create your first job!</td></tr>'
+
+    return render_template_string(f'''<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldPulse — Jobs</title>
+    {TAILWIND_CDN}
+    {FIELD_PULSE_CSS}
+</head>
+<body class="bg-slate-900 text-white">
+    <div class="flex min-h-screen">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-slate-950 border-r border-slate-800 fixed h-full">
+            <div class="p-6">
+                <div class="flex items-center gap-3 mb-8">
+                    <div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg">FieldPulse</h1>
+                    </div>
+                </div>
+                <nav class="space-y-1">
+                    <a href="/fieldpulse/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6z"/>
+                        </svg>
+                        Dashboard
+                    </a>
+                    <a href="/fieldpulse/jobs" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                        Jobs
+                    </a>
+                </nav>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 ml-64">
+            <header class="bg-slate-900 border-b border-slate-800 px-8 py-4 sticky top-0 z-10">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xl font-semibold">Jobs</h2>
+                    <a href="/fieldpulse/jobs/new" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium transition">+ New Job</a>
+                </div>
+            </header>
+
+            <div class="p-8">
+                <!-- Filters -->
+                <div class="mb-6 flex gap-2">
+                    <a href="/fieldpulse/jobs" class="px-4 py-2 rounded-lg text-sm font-medium {'bg-emerald-500 text-white' if not status_filter else 'bg-slate-800 text-slate-300 hover:text-white'}">All</a>
+                    <a href="/fieldpulse/jobs?status=scheduled" class="px-4 py-2 rounded-lg text-sm font-medium {'bg-emerald-500 text-white' if status_filter == 'scheduled' else 'bg-slate-800 text-slate-300 hover:text-white'}">Scheduled</a>
+                    <a href="/fieldpulse/jobs?status=in_progress" class="px-4 py-2 rounded-lg text-sm font-medium {'bg-emerald-500 text-white' if status_filter == 'in_progress' else 'bg-slate-800 text-slate-300 hover:text-white'}">In Progress</a>
+                    <a href="/fieldpulse/jobs?status=completed" class="px-4 py-2 rounded-lg text-sm font-medium {'bg-emerald-500 text-white' if status_filter == 'completed' else 'bg-slate-800 text-slate-300 hover:text-white'}">Completed</a>
+                </div>
+
+                <!-- Jobs Table -->
+                <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="text-left text-sm text-slate-400 border-b border-slate-700">
+                                <th class="py-3 px-4 font-medium">Job / Customer</th>
+                                <th class="py-3 px-4 font-medium">Scheduled</th>
+                                <th class="py-3 px-4 font-medium">Status</th>
+                                <th class="py-3 px-4 font-medium">Crew</th>
+                                <th class="py-3 px-4 font-medium">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-sm">
+                            {job_rows}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>''')
+
+
+@app.route("/fieldpulse/jobs/new", methods=["GET", "POST"])
+@fp_login_required
+def fieldpulse_new_job():
+    """Create new job page."""
+    business = get_business_from_session()
+    if not business:
+        return redirect(url_for("fieldpulse_logout"))
+
+    business_id = business['id']
+    error = ""
+
+    # Get available crews for dropdown
+    crews = get_crews_for_business(business_id)
+    crew_options = '<option value="">Unassigned</option>'
+    for crew in (crews or []):
+        crew_options += f'<option value="{crew["id"]}">{crew.get("name", "Unnamed Crew")}</option>'
+
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        customer_name = request.form.get("customer_name", "").strip()
+        customer_phone = request.form.get("customer_phone", "").strip()
+        customer_email = request.form.get("customer_email", "").strip()
+        address = request.form.get("address", "").strip()
+        city = request.form.get("city", "").strip()
+        scheduled_date = request.form.get("scheduled_date", "").strip()
+        scheduled_time = request.form.get("scheduled_time", "").strip()
+        estimated_duration = request.form.get("estimated_duration", "60").strip()
+        crew_id = request.form.get("crew_id", "").strip()
+        description = request.form.get("description", "").strip()
+
+        if not title:
+            error = "Job title is required"
+        elif not customer_name:
+            error = "Customer name is required"
+        elif not scheduled_date:
+            error = "Scheduled date is required"
+        else:
+            # Combine date and time
+            if scheduled_time:
+                scheduled_datetime = f"{scheduled_date} {scheduled_time}:00"
+            else:
+                scheduled_datetime = f"{scheduled_date} 09:00:00"
+
+            try:
+                query_db("""INSERT INTO jobs
+                    (business_id, title, description, customer_name, customer_phone, customer_email,
+                     address, city, scheduled_date, status, crew_id, estimated_duration_min)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'scheduled', %s, %s)""",
+                    (business_id, title, description, customer_name, customer_phone, customer_email,
+                     address, city, scheduled_datetime, crew_id if crew_id else None,
+                     int(estimated_duration) if estimated_duration else 60))
+                return redirect(url_for("fieldpulse_jobs"))
+            except Exception as e:
+                logger.error(f"Error creating job: {e}")
+                error = f"Error creating job: {str(e)}"
+
+    return render_template_string(f'''<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldPulse — New Job</title>
+    {TAILWIND_CDN}
+    {FIELD_PULSE_CSS}
+</head>
+<body class="bg-slate-900 text-white">
+    <div class="flex min-h-screen">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-slate-950 border-r border-slate-800 fixed h-full">
+            <div class="p-6">
+                <div class="flex items-center gap-3 mb-8">
+                    <div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg">FieldPulse</h1>
+                    </div>
+                </div>
+                <nav class="space-y-1">
+                    <a href="/fieldpulse/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6z"/>
+                        </svg>
+                        Dashboard
+                    </a>
+                    <a href="/fieldpulse/jobs" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                        Jobs
+                    </a>
+                </nav>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 ml-64">
+            <header class="bg-slate-900 border-b border-slate-800 px-8 py-4 sticky top-0 z-10">
+                <div class="flex items-center gap-4">
+                    <a href="/fieldpulse/jobs" class="text-slate-400 hover:text-white">← Back to Jobs</a>
+                    <h2 class="text-xl font-semibold">New Job</h2>
+                </div>
+            </header>
+
+            <div class="p-8 max-w-2xl">
+                {f'<div class="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400">{error}</div>' if error else ''}
+
+                <form method="POST" class="space-y-6">
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <h3 class="text-lg font-medium text-white mb-4">Job Details</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Job Title *</label>
+                                <input type="text" name="title" required class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Description</label>
+                                <textarea name="description" rows="3" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <h3 class="text-lg font-medium text-white mb-4">Customer Information</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Customer Name *</label>
+                                <input type="text" name="customer_name" required class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Phone</label>
+                                <input type="tel" name="customer_phone" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Email</label>
+                                <input type="email" name="customer_email" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Address</label>
+                                <input type="text" name="address" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-300 mb-2">City</label>
+                                <input type="text" name="city" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <h3 class="text-lg font-medium text-white mb-4">Scheduling</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Date *</label>
+                                <input type="date" name="scheduled_date" required class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Time</label>
+                                <input type="time" name="scheduled_time" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Est. Duration (min)</label>
+                                <input type="number" name="estimated_duration" value="60" min="15" step="15" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Crew</label>
+                                <select name="crew_id" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">{crew_options}</select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition">Create Job</button>
+                        <a href="/fieldpulse/jobs" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+</body>
+</html>''')
+
+
+# Job Detail Route - to be appended to dashboard.py
+
+@app.route("/fieldpulse/jobs/<job_id>", methods=["GET", "POST"])
+@fp_login_required
+def fieldpulse_job_detail(job_id):
+    """View and edit job details with status actions."""
+    business = get_business_from_session()
+    if not business:
+        return redirect(url_for("fieldpulse_logout"))
+
+    business_id = business['id']
+    error = ""
+    success = ""
+    user_name = session.get("fp_user_name", "User")
+
+    # Get job details
+    job = query_db(
+        "SELECT j.*, c.name as crew_name FROM jobs j LEFT JOIN crews c ON j.crew_id = c.id WHERE j.id = %s AND j.business_id = %s",
+        (job_id, business_id),
+        one=True
+    )
+
+    if not job:
+        return redirect(url_for("fieldpulse_jobs"))
+
+    # Get available crews for dropdown
+    crews = get_crews_for_business(business_id)
+    crew_options = '<option value="">Unassigned</option>'
+    for crew in (crews or []):
+        selected = 'selected' if job.get('crew_id') == crew['id'] else ''
+        crew_options += f'<option value="{crew["id"]}" {selected}>{crew.get("name", "Unnamed Crew")}</option>'
+
+    # Handle status update (POST from buttons)
+    if request.method == "POST":
+        action = request.form.get("action", "")
+
+        if action == "start":
+            query_db("UPDATE jobs SET status = 'in_progress', started_at = NOW() WHERE id = %s", (job_id,))
+            success = "Job started!"
+            job['status'] = 'in_progress'
+
+        elif action == "complete":
+            query_db("UPDATE jobs SET status = 'completed', completed_at = NOW() WHERE id = %s", (job_id,))
+            success = "Job completed!"
+            job['status'] = 'completed'
+
+        elif action == "cancel":
+            query_db("UPDATE jobs SET status = 'cancelled', updated_at = NOW() WHERE id = %s", (job_id,))
+            success = "Job cancelled."
+            job['status'] = 'cancelled'
+
+        elif action == "update":
+            # Update job details
+            title = request.form.get("title", "").strip()
+            customer_name = request.form.get("customer_name", "").strip()
+            customer_phone = request.form.get("customer_phone", "").strip()
+            customer_email = request.form.get("customer_email", "").strip()
+            address = request.form.get("address", "").strip()
+            city = request.form.get("city", "").strip()
+            scheduled_date = request.form.get("scheduled_date", "").strip()
+            scheduled_time = request.form.get("scheduled_time", "").strip()
+            estimated_duration = request.form.get("estimated_duration", "").strip()
+            crew_id = request.form.get("crew_id", "").strip()
+            description = request.form.get("description", "").strip()
+
+            if scheduled_date:
+                if scheduled_time:
+                    scheduled_datetime = f"{scheduled_date} {scheduled_time}:00"
+                else:
+                    scheduled_datetime = f"{scheduled_date} 09:00:00"
+            else:
+                scheduled_datetime = job['scheduled_date']
+
+            try:
+                query_db("""UPDATE jobs SET title = %s, customer_name = %s, customer_phone = %s, customer_email = %s, address = %s, city = %s, scheduled_date = %s, crew_id = %s, estimated_duration_min = %s, description = %s, updated_at = NOW() WHERE id = %s""",
+                    (title or job['title'], customer_name or job['customer_name'], customer_phone or job['customer_phone'], customer_email or job['customer_email'], address or job['address'], city or job['city'], scheduled_datetime, crew_id if crew_id else None, int(estimated_duration) if estimated_duration else job['estimated_duration_min'], description or job['description'], job_id))
+                success = "Job updated successfully!"
+                # Refresh job data
+                job = query_db("SELECT j.*, c.name as crew_name FROM jobs j LEFT JOIN crews c ON j.crew_id = c.id WHERE j.id = %s AND j.business_id = %s", (job_id, business_id), one=True)
+            except Exception as e:
+                logger.error(f"Error updating job: {e}")
+                error = f"Error updating job: {str(e)}"
+
+    # Status display and actions
+    status_colors = {
+        'scheduled': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+        'in_progress': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+        'completed': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+        'cancelled': 'bg-red-500/10 text-red-400 border-red-500/20'
+    }
+    status_class = status_colors.get(job['status'], 'bg-slate-700 text-slate-400')
+
+    # Build action buttons based on status
+    action_buttons = ""
+    if job['status'] == 'scheduled':
+        action_buttons = '<form method="POST" class="inline"><input type="hidden" name="action" value="start"><button type="submit" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-medium transition">▶ Start Job</button></form>'
+    elif job['status'] == 'in_progress':
+        action_buttons = '<form method="POST" class="inline"><input type="hidden" name="action" value="complete"><button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium transition">✓ Complete Job</button></form>'
+
+    # Format dates
+    date_str = str(job['scheduled_date'])[:10] if job['scheduled_date'] else ''
+    time_str = str(job['scheduled_date'])[11:16] if job['scheduled_date'] and len(str(job['scheduled_date'])) > 10 else '09:00'
+
+    return render_template_string(f"""
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldPulse — Job Details</title>
+    {TAILWIND_CDN}
+    {FIELD_PULSE_CSS}
+</head>
+<body class="bg-slate-900 text-white">
+    <div class="flex min-h-screen">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-slate-950 border-r border-slate-800 fixed h-full">
+            <div class="p-6">
+                <div class="flex items-center gap-3 mb-8">
+                    <div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg">FieldPulse</h1>
+                    </div>
+                </div>
+                <nav class="space-y-1">
+                    <a href="/fieldpulse/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6z"/>
+                        </svg>
+                        Dashboard
+                    </a>
+                    <a href="/fieldpulse/jobs" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                        Jobs
+                    </a>
+                </nav>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 ml-64">
+            <header class="bg-slate-900 border-b border-slate-800 px-8 py-4 sticky top-0 z-10">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <a href="/fieldpulse/jobs" class="text-slate-400 hover:text-white">← Back to Jobs</a>
+                        <h2 class="text-xl font-semibold">Job Details</h2>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="px-3 py-1 rounded-full text-sm font-medium border {status_class}">
+                            {job['status'].replace('_', ' ').title()}
+                        </span>
+                        {action_buttons}
+                    </div>
+                </div>
+            </header>
+
+            <div class="p-8 max-w-4xl">
+                {f'<div class="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-400">{success}</div>' if success else ''}
+                {f'<div class="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400">{error}</div>' if error else ''}
+
+                <form method="POST" class="space-y-6">
+                    <input type="hidden" name="action" value="update">
+
+                    <!-- Job Info -->
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <h3 class="text-lg font-medium text-white mb-4">Job Details</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Job Title</label>
+                                <input type="text" name="title" value="{job.get('title', '')}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Description</label>
+                                <textarea name="description" rows="3" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">{job.get('description', '')}</textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Customer Info -->
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <h3 class="text-lg font-medium text-white mb-4">Customer Information</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Customer Name</label>
+                                <input type="text" name="customer_name" value="{job.get('customer_name', '')}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Phone</label>
+                                <input type="tel" name="customer_phone" value="{job.get('customer_phone', '')}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Email</label>
+                                <input type="email" name="customer_email" value="{job.get('customer_email', '')}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Address</label>
+                                <input type="text" name="address" value="{job.get('address', '')}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">City</label>
+                                <input type="text" name="city" value="{job.get('city', '')}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Scheduling -->
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                        <h3 class="text-lg font-medium text-white mb-4">Scheduling</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Date</label>
+                                <input type="date" name="scheduled_date" value="{date_str}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Time</label>
+                                <input type="time" name="scheduled_time" value="{time_str}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Est. Duration (min)</label>
+                                <input type="number" name="estimated_duration" value="{job.get('estimated_duration_min', 60)}" min="15" step="15" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Crew</label>
+                                <select name="crew_id" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">{crew_options}</select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex gap-4">
+                        <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition">Save Changes</button>
+                        <a href="/fieldpulse/jobs" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+</body>
+</html>
+""")
