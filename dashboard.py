@@ -674,9 +674,9 @@ def fieldpulse_dashboard():
                         <span class="px-3 py-1 bg-emerald-500/10 text-emerald-400 text-sm rounded-full border border-emerald-500/20">
                             Trial ends in 13 days
                         </span>
-                        <button class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+                        <a href="/fieldpulse/jobs/new" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
                             + New Job
-                        </button>
+                        </a>
                     </div>
                 </div>
             </header>
