@@ -1722,10 +1722,16 @@ def fieldpulse_job_detail(job_id):
             type_class = photo_type_colors.get(photo.get('photo_type', 'progress'), 'bg-slate-700 text-slate-400')
             type_label = escape(photo.get('photo_type', 'progress').replace('_', ' ').title())
             caption = escape(photo.get('caption', '') or '')
+            photo_url = photo.get('photo_url', '')
             photos_html += f'''
             <div class="bg-slate-700/50 rounded-lg overflow-hidden border border-slate-600">
-                <div class="relative">
-                    <img src="{photo.get('photo_url', '')}" alt="Job photo" class="w-full h-48 object-cover">
+                <div class="relative group">
+                    <a href="{photo_url}" target="_blank" class="block cursor-zoom-in">
+                        <img src="{photo_url}" alt="Job photo" class="w-full h-48 object-cover transition transform group-hover:scale-105">
+                        <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
+                            <span class="opacity-0 group-hover:opacity-100 text-white text-2xl">🔍</span>
+                        </div>
+                    </a>
                     <span class="absolute top-2 right-2 px-2 py-1 text-xs font-medium rounded border {type_class}">{type_label}</span>
                 </div>
                 <div class="p-3">
