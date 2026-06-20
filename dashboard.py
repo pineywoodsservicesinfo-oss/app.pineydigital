@@ -364,12 +364,14 @@ def get_job_notes(job_id):
 
 def get_job_photos(job_id):
     """Get all photos for a job."""
-    return query_db(
+    photos = query_db(
         """SELECT * FROM job_photos
            WHERE job_id = %s
            ORDER BY created_at DESC""",
         (job_id,)
     )
+    logger.info(f"get_job_photos for job {job_id}: found {len(photos) if photos else 0} photos")
+    return photos
 
 
 @cached_query("job_stats", ttl=10)
@@ -1648,8 +1650,9 @@ def fieldpulse_job_detail(job_id):
                                            VALUES (%s, %s, %s, %s, NOW())""",
                                         (job_id, photo_url, photo_type, caption if caption else None))
                                 success = f"Photo uploaded successfully! ({len(photo_data) / 1024:.0f}KB)"
+                                logger.info(f"Photo uploaded for job {job_id}: {len(photo_url)} chars")
                             except Exception as e:
-                                logger.error(f"Error uploading photo: {e}")
+                                logger.error(f"Error uploading photo for job {job_id}: {e}")
                                 error = f"Error uploading photo: {str(e)}"
 
     # Get notes for this job
@@ -1671,6 +1674,7 @@ def fieldpulse_job_detail(job_id):
 
     # Get photos for this job
     photos = get_job_photos(job_id)
+    logger.info(f"Job {job_id}: {len(photos) if photos else 0} photos retrieved")
     photos_html = ""
     if photos:
         photo_type_colors = {
