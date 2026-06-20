@@ -74,6 +74,9 @@ from modules.database import init_db, seed_leads_from_csv
 init_db()
 seed_leads_from_csv()
 
+# Initialize job_notes and job_photos tables
+init_job_tables()
+
 # Seed FieldPulse demo data if empty
 def seed_fieldpulse_demo():
     """Seed demo data for FieldPulse if users table is empty."""
@@ -180,6 +183,49 @@ def query_db(sql, params=(), one=False):
     except Exception as e:
         logger.error(f"Database query error: {e}")
         return None if one else []
+
+
+def init_job_tables():
+    """Initialize job_notes and job_photos tables if they don't exist."""
+    try:
+        # Check if tables exist
+        tables = query_db("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public'
+            AND table_name IN ('job_notes', 'job_photos')
+        """)
+
+        existing_tables = {t['table_name'] for t in (tables or [])}
+
+        if 'job_notes' not in existing_tables:
+            query_db("""
+                CREATE TABLE job_notes (
+                    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
+                    note TEXT NOT NULL,
+                    created_by VARCHAR(100),
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            "", one=True)
+            query_db("CREATE INDEX idx_notes_job ON job_notes(job_id)", one=True)
+            logger.info("Created job_notes table")
+
+        if 'job_photos' not in existing_tables:
+            query_db("""
+                CREATE TABLE job_photos (
+                    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
+                    photo_url TEXT NOT NULL,
+                    photo_type VARCHAR(50) DEFAULT 'progress',
+                    caption TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            "", one=True)
+            query_db("CREATE INDEX idx_photos_job ON job_photos(job_id)", one=True)
+            logger.info("Created job_photos table")
+
+    except Exception as e:
+        logger.error(f"Error initializing job tables: {e}")
 
 
 # ═════════════════════════════════════════════════════════════════
