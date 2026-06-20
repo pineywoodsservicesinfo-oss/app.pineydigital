@@ -24,6 +24,7 @@ from pathlib import Path
 from functools import wraps
 from flask import (Flask, render_template_string, redirect,
                    url_for, request, session, jsonify)
+from markupsafe import escape
 
 logger = logging.getLogger(__name__)
 
@@ -633,8 +634,8 @@ def fieldpulse_dashboard():
         <div class="job-card bg-slate-800 rounded-xl p-5 border border-slate-700 fade-in">
             <div class="flex items-start justify-between mb-3">
                 <div>
-                    <h3 class="font-semibold text-white">{job.get('title', 'Untitled Job')}</h3>
-                    <p class="text-sm text-slate-400 mt-1">{job.get('customer_name', 'Unknown Customer')}</p>
+                    <h3 class="font-semibold text-white">{escape(job.get('title', 'Untitled Job'))}</h3>
+                    <p class="text-sm text-slate-400 mt-1">{escape(job.get('customer_name', 'Unknown Customer'))}</p>
                 </div>
                 <span class="status-badge {status_class}">
                     <span class="w-2 h-2 rounded-full bg-current"></span>
@@ -654,7 +655,7 @@ def fieldpulse_dashboard():
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3  0 016 0z"/>
                         </svg>
-                        {job.get('city', 'No location')}
+                        {escape(job.get('city', 'No location'))}
                     </span>
                 </div>
                 <div class="flex items-center gap-2">
@@ -1080,14 +1081,14 @@ def fieldpulse_jobs():
 
         job_rows += f'''<tr class="border-t border-slate-700 hover:bg-slate-800/50">
             <td class="py-4 px-4">
-                <div class="font-medium text-white">{job.get('title', 'Untitled')}</div>
-                <div class="text-sm text-slate-500">{job.get('customer_name', 'No customer')}</div>
+                <div class="font-medium text-white">{escape(job.get('title', 'Untitled'))}</div>
+                <div class="text-sm text-slate-500">{escape(job.get('customer_name', 'No customer'))}</div>
             </td>
             <td class="py-4 px-4 text-slate-300">{scheduled}</td>
             <td class="py-4 px-4">
                 <span class="px-2 py-1 rounded text-xs font-medium border {status_class}">{status_text}</span>
             </td>
-            <td class="py-4 px-4 text-slate-300">{crew}</td>
+            <td class="py-4 px-4 text-slate-300">{escape(crew)}</td>
             <td class="py-4 px-4">
                 {quick_actions}
                 <a href="/fieldpulse/jobs/{job['id']}" class="text-emerald-400 hover:text-emerald-300 font-medium text-xs">Edit →</a>
@@ -1646,10 +1647,10 @@ def fieldpulse_job_detail(job_id):
             notes_html += f'''
             <div class="bg-slate-700/50 rounded-lg p-4 border border-slate-600">
                 <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm font-medium text-slate-300">{note.get('created_by', 'Unknown')}</span>
+                    <span class="text-sm font-medium text-slate-300">{escape(note.get('created_by', 'Unknown'))}</span>
                     <span class="text-xs text-slate-500">{note_time}</span>
                 </div>
-                <p class="text-slate-200 whitespace-pre-wrap">{note.get('note', '')}</p>
+                <p class="text-slate-200 whitespace-pre-wrap">{escape(note.get('note', ''))}</p>
             </div>'''
     else:
         notes_html = '<p class="text-slate-500 text-center py-4">No notes yet. Add the first note below.</p>'
@@ -1667,12 +1668,12 @@ def fieldpulse_job_detail(job_id):
         for photo in photos:
             photo_time = photo['created_at'].strftime('%b %d, %Y at %I:%M %p') if photo['created_at'] else ''
             type_class = photo_type_colors.get(photo.get('photo_type', 'progress'), 'bg-slate-700 text-slate-400')
-            type_label = photo.get('photo_type', 'progress').replace('_', ' ').title()
-            caption = photo.get('caption', '') or ''
+            type_label = escape(photo.get('photo_type', 'progress').replace('_', ' ').title())
+            caption = escape(photo.get('caption', '') or '')
             photos_html += f'''
             <div class="bg-slate-700/50 rounded-lg overflow-hidden border border-slate-600">
                 <div class="relative">
-                    <img src="{photo.get('photo_url', '')}" alt="Job photo" class="w-full h-48 object-cover">
+                    <img src="{escape(photo.get('photo_url', ''))}" alt="Job photo" class="w-full h-48 object-cover">
                     <span class="absolute top-2 right-2 px-2 py-1 text-xs font-medium rounded border {type_class}">{type_label}</span>
                 </div>
                 <div class="p-3">
@@ -1775,11 +1776,11 @@ def fieldpulse_job_detail(job_id):
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div class="md:col-span-2">
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Job Title</label>
-                                <input type="text" name="title" value="{job.get('title', '')}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                <input type="text" name="title" value="{escape(job.get('title', ''))}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
                             </div>
                             <div class="md:col-span-2">
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Description</label>
-                                <textarea name="description" rows="3" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">{job.get('description', '')}</textarea>
+                                <textarea name="description" rows="3" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">{escape(job.get('description', ''))}</textarea>
                             </div>
                         </div>
                     </div>
@@ -1790,23 +1791,23 @@ def fieldpulse_job_detail(job_id):
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Customer Name</label>
-                                <input type="text" name="customer_name" value="{job.get('customer_name', '')}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                <input type="text" name="customer_name" value="{escape(job.get('customer_name', ''))}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Phone</label>
-                                <input type="tel" name="customer_phone" value="{job.get('customer_phone', '')}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                <input type="tel" name="customer_phone" value="{escape(job.get('customer_phone', ''))}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
                             </div>
                             <div class="md:col-span-2">
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Email</label>
-                                <input type="email" name="customer_email" value="{job.get('customer_email', '')}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                <input type="email" name="customer_email" value="{escape(job.get('customer_email', ''))}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
                             </div>
                             <div class="md:col-span-2">
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Address</label>
-                                <input type="text" name="address" value="{job.get('address', '')}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                <input type="text" name="address" value="{escape(job.get('address', ''))}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">City</label>
-                                <input type="text" name="city" value="{job.get('city', '')}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                <input type="text" name="city" value="{escape(job.get('city', ''))}" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
                             </div>
                         </div>
                     </div>
