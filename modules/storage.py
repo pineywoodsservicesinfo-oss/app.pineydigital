@@ -56,12 +56,13 @@ def upload_file(file_data, filename, content_type='application/octet-stream', fo
     unique_name = f"{folder}/{uuid.uuid4().hex[:16]}.{file_ext}" if file_ext else f"{folder}/{uuid.uuid4().hex[:16]}"
 
     try:
-        # Upload without ACL - Railway uses public buckets by default
+        # Upload with public-read ACL
         s3.put_object(
             Bucket=S3_BUCKET_NAME,
             Key=unique_name,
             Body=file_data,
-            ContentType=content_type
+            ContentType=content_type,
+            ACL='public-read'
         )
 
         # Construct public URL
@@ -115,7 +116,7 @@ def is_configured():
     return all([S3_BUCKET_NAME, S3_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY])
 
 def make_bucket_public():
-    """Set bucket policy to allow public read access."""
+    """Make all existing objects public by re-uploading with public ACL."""
     if not S3_BUCKET_NAME:
         logger.error("S3_BUCKET_NAME not configured")
         return False
@@ -125,22 +126,22 @@ def make_bucket_public():
         return False
 
     try:
-        policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Sid": "PublicReadGetObject",
-                    "Effect": "Allow",
-                    "Principal": "*",
-                    "Action": "s3:GetObject",
-                    "Resource": f"arn:aws:s3:::{S3_BUCKET_NAME}/*"
-                }
-            ]
-        }
-        import json
-        s3.put_bucket_policy(Bucket=S3_BUCKET_NAME, Policy=json.dumps(policy))
-        logger.info(f"Bucket {S3_BUCKET_NAME} is now public")
+        # List all objects and make them public
+        response = s3.list_objects_v2(Bucket=S3_BUCKET_NAME)
+        if 'Contents' in response:
+            for obj in response['Contents']:
+                key = obj['Key']
+                # Copy object to itself with public-read ACL
+                s3.copy_object(
+                    Bucket=S3_BUCKET_NAME,
+                    CopySource=f"{S3_BUCKET_NAME}/{key}",
+                    Key=key,
+                    MetadataDirective='COPY',
+                    ACL='public-read'
+                )
+                logger.info(f"Made public: {key}")
+        logger.info(f"Bucket {S3_BUCKET_NAME} objects are now public")
         return True
     except Exception as e:
-        logger.error(f"Error setting bucket policy: {e}")
+        logger.error(f"Error making objects public: {e}")
         return False
