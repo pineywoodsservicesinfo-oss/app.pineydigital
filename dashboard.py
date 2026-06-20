@@ -883,7 +883,9 @@ def login():
 
     csrf_token_input = f'<input type="hidden" name="csrf_token" value="{generate_csrf_token()}">'
 
-    return render_template_string("""<!DOCTYPE html>
+    # Build HTML response directly - avoid Jinja2 template issues with CSS braces
+    error_html = f'<p class="error">{error}</p>' if error else ''
+    html_content = f"""<!DOCTYPE html>
 <html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Admin Login</title>
@@ -898,14 +900,15 @@ button{{width:100%;padding:12px;background:#10b981;color:#fff;border:none;border
 </style></head><body>
 <div class="card">
 <h1>Admin Login</h1>
-""" + ('<p class="error">' + error + '</p>' if error else '') + """
+{error_html}
 <form method="POST">
-""" + csrf_token_input + """
+{csrf_token_input}
 <input type="email" name="email" placeholder="Email" required>
 <input type="password" name="password" placeholder="Password" required>
 <button type="submit">Sign In</button>
 </form>
-</div></body></html>""")
+</div></body></html>"""
+    return html_content
 
 
 @app.route("/logout")
