@@ -46,6 +46,9 @@ from modules.security import (
     get_security_headers, verify_password
 )
 
+# Import storage module for S3 uploads
+from modules.storage import upload_file, is_configured as storage_configured
+
 app = Flask(__name__)
 
 # Security: Require these to be set in environment
@@ -1651,24 +1654,40 @@ def fieldpulse_job_detail(job_id):
                             except Exception as img_err:
                                 logger.warning(f"Image resize failed: {img_err}, using original")
 
-                            # Store as base64 data URL
-                            import base64
-                            photo_base64 = base64.b64encode(photo_data).decode('utf-8')
-                            photo_url = f"data:image/jpeg;base64,{photo_base64}"
-
+                            # Upload to S3/Object Storage instead of base64
                             photo_type = request.form.get("photo_type", "progress")
                             caption = request.form.get("photo_caption", "").strip()
 
-                            try:
-                                query_db("""INSERT INTO job_photos
-                                           (job_id, photo_url, photo_type, caption, created_at)
-                                           VALUES (%s, %s, %s, %s, NOW())""",
-                                        (job_id, photo_url, photo_type, caption if caption else None))
-                                success = f"Photo uploaded successfully! ({len(photo_data) / 1024:.0f}KB)"
-                                logger.info(f"Photo uploaded for job {job_id}: {len(photo_url)} chars")
-                            except Exception as e:
-                                logger.error(f"Error uploading photo for job {job_id}: {e}")
-                                error = f"Error uploading photo: {str(e)}"
+                            # Determine content type based on processed image
+                            content_type = 'image/jpeg'
+
+                            if storage_configured():
+                                photo_url = upload_file(
+                                    photo_data,
+                                    photo_file.filename,
+                                    content_type=content_type,
+                                    folder=f"jobs/{job_id}"
+                                )
+                            else:
+                                # Fallback to base64 if S3 not configured
+                                import base64
+                                photo_base64 = base64.b64encode(photo_data).decode('utf-8')
+                                photo_url = f"data:image/jpeg;base64,{photo_base64}"
+                                logger.warning(f"S3 not configured, using base64 fallback for job {job_id}")
+
+                            if photo_url:
+                                try:
+                                    query_db("""INSERT INTO job_photos
+                                               (job_id, photo_url, photo_type, caption, created_at)
+                                               VALUES (%s, %s, %s, %s, NOW())""",
+                                            (job_id, photo_url, photo_type, caption if caption else None))
+                                    success = f"Photo uploaded successfully! ({len(photo_data) / 1024:.0f}KB)"
+                                    logger.info(f"Photo uploaded for job {job_id}: {photo_url}")
+                                except Exception as e:
+                                    logger.error(f"Error saving photo to database for job {job_id}: {e}")
+                                    error = f"Error saving photo: {str(e)}"
+                            else:
+                                error = "Failed to upload photo to storage"
 
     # Get notes for this job
     notes = get_job_notes(job_id)
