@@ -223,9 +223,6 @@ def init_job_tables():
     except Exception as e:
         logger.error(f"Error initializing job tables: {e}")
 
-# Initialize job tables after function is defined
-init_job_tables()
-
 
 # ═════════════════════════════════════════════════════════════════
 # AUTH DECORATORS
@@ -934,6 +931,50 @@ def logout():
     """Admin logout."""
     session.pop("logged_in", None)
     return redirect(url_for("login"))
+
+
+@app.route("/admin/migrate", methods=["GET", "POST"])
+@login_required
+def admin_migrate():
+    """Run database migrations."""
+    if request.method == "POST":
+        try:
+            # Create job_notes table
+            query_db("""
+                CREATE TABLE IF NOT EXISTS job_notes (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
+                    note TEXT NOT NULL,
+                    created_by VARCHAR(100),
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            "", one=True)
+            query_db("CREATE INDEX IF NOT EXISTS idx_notes_job ON job_notes(job_id)", one=True)
+
+            # Create job_photos table with TEXT for photo_url
+            query_db("""
+                CREATE TABLE IF NOT EXISTS job_photos (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
+                    photo_url TEXT NOT NULL,
+                    photo_type VARCHAR(50) DEFAULT 'progress',
+                    caption TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            "", one=True)
+            query_db("CREATE INDEX IF NOT EXISTS idx_photos_job ON job_photos(job_id)", one=True)
+
+            return jsonify({"status": "success", "message": "Migration completed successfully!"})
+        except Exception as e:
+            return jsonify({"status": "error", "message": str(e)}), 500
+
+    return """<!DOCTYPE html>
+<html><head><title>Run Migration</title></style>
+</head><body>
+<h1>Database Migration</h1>
+<p>This will create job_notes and job_photos tables.</p>
+<form method="POST"><button type="submit">Run Migration</button></form>
+</body></html>"""
 
 
 # ═════════════════════════════════════════════════════════════════
