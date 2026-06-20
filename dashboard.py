@@ -1494,8 +1494,12 @@ def fieldpulse_job_detail(job_id):
     if request.method == "POST":
         action = request.form.get("action", "")
 
-        # Get redirect destination (from hidden field or referrer)
+        # Get redirect destination (from hidden field or referrer) - validate for open redirect
         redirect_to = request.form.get("redirect_to") or request.headers.get("Referer", "/fieldpulse/jobs")
+        # Security: Only allow relative redirects to our own domain
+        ALLOWED_REDIRECTS = ['/fieldpulse/dashboard', '/fieldpulse/jobs', '/fieldpulse/schedule', '/fieldpulse/crew']
+        if redirect_to not in ALLOWED_REDIRECTS:
+            redirect_to = "/fieldpulse/jobs"
 
         if action == "start":
             query_db("UPDATE jobs SET status = 'in_progress', started_at = NOW() WHERE id = %s", (job_id,))
