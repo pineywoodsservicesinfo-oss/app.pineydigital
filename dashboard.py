@@ -954,6 +954,12 @@ def admin_migrate():
             """)
             query_db("CREATE INDEX IF NOT EXISTS idx_photos_job ON job_photos(job_id)")
 
+            # Fix: Alter photo_url column to TEXT if it exists as VARCHAR (for existing tables)
+            try:
+                query_db("ALTER TABLE job_photos ALTER COLUMN photo_url TYPE TEXT")
+            except Exception:
+                pass  # Column may already be TEXT or table doesn't exist yet
+
             return jsonify({"status": "success", "message": "Migration completed successfully!"})
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)}), 500
