@@ -863,9 +863,12 @@ def login():
     error = ""
 
     if request.method == "POST":
-        # Validate CSRF token
-        if not validate_csrf_token(request.form.get('csrf_token')):
-            error = "Invalid or missing CSRF token."
+        # Validate CSRF token (only if session has one - for login we generate fresh)
+        session_token = session.get('csrf_token')
+        if session_token:
+            form_token = request.form.get('csrf_token')
+            if not form_token or not validate_csrf_token(form_token, session_token):
+                error = "Invalid or missing CSRF token."
 
         if not error:
             email = request.form.get("email", "").strip().lower()
