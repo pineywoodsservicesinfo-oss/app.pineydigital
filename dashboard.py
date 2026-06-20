@@ -1687,7 +1687,7 @@ def fieldpulse_job_detail(job_id):
             photos_html += f'''
             <div class="bg-slate-700/50 rounded-lg overflow-hidden border border-slate-600">
                 <div class="relative">
-                    <img src="{escape(photo.get('photo_url', ''))}" alt="Job photo" class="w-full h-48 object-cover">
+                    <img src="{photo.get('photo_url', '')}" alt="Job photo" class="w-full h-48 object-cover">
                     <span class="absolute top-2 right-2 px-2 py-1 text-xs font-medium rounded border {type_class}">{type_label}</span>
                 </div>
                 <div class="p-3">
