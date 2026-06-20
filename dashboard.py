@@ -61,6 +61,19 @@ if not DASHBOARD_PASS:
 
 app.secret_key = DASHBOARD_SECRET
 
+# Session cookie security settings
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') == 'production'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+# Apply security headers to all responses
+@app.after_request
+def apply_security_headers(response):
+    headers = get_security_headers()
+    for header, value in headers.items():
+        response.headers[header] = value
+    return response
+
 # Database path - use db_config for SQLite or PostgreSQL support
 if db_config.is_sqlite:
     DB_PATH = db_config.get_sqlite_path()
@@ -471,6 +484,7 @@ def fieldpulse_login():
             session["fp_user_id"] = user['id']
             session["fp_business_id"] = user['business_id']
             session["fp_user_name"] = user.get('name', email.split('@')[0])
+            session["csrf_token"] = generate_csrf_token()
 
             # Update last login
             query_db(
@@ -846,18 +860,27 @@ def fieldpulse_logout():
 def login():
     """Admin login with email + password."""
     error = ""
-    if request.method == "POST":
-        email = request.form.get("email", "").strip().lower()
-        password = request.form.get("password", "")
-        admin_email = os.environ.get("ADMIN_EMAIL", "joel@pineydigital.com").lower()
 
-        if email != admin_email:
-            error = "Invalid credentials."
-        elif password != DASHBOARD_PASS:
-            error = "Invalid credentials."
-        else:
-            session["logged_in"] = True
-            return redirect(url_for("overview"))
+    if request.method == "POST":
+        # Validate CSRF token
+        if not validate_csrf_token(request.form.get('csrf_token')):
+            error = "Invalid or missing CSRF token."
+
+        if not error:
+            email = request.form.get("email", "").strip().lower()
+            password = request.form.get("password", "")
+            admin_email = os.environ.get("ADMIN_EMAIL", "joel@pineydigital.com").lower()
+
+            if email != admin_email:
+                error = "Invalid credentials."
+            elif password != DASHBOARD_PASS:
+                error = "Invalid credentials."
+            else:
+                session["logged_in"] = True
+                session["csrf_token"] = generate_csrf_token()
+                return redirect(url_for("overview"))
+
+    csrf_token_input = f'<input type="hidden" name="csrf_token" value="{generate_csrf_token()}">'
 
     return render_template_string("""<!DOCTYPE html>
 <html><head>
@@ -876,6 +899,7 @@ button{{width:100%;padding:12px;background:#10b981;color:#fff;border:none;border
 <h1>Admin Login</h1>
 """ + ('<p class="error">' + error + '</p>' if error else '') + """
 <form method="POST">
+""" + csrf_token_input + """
 <input type="email" name="email" placeholder="Email" required>
 <input type="password" name="password" placeholder="Password" required>
 <button type="submit">Sign In</button>
