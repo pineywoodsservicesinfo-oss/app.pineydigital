@@ -970,11 +970,26 @@ def admin_migrate():
             return jsonify({"status": "error", "message": str(e)}), 500
 
     return """<!DOCTYPE html>
-<html><head><title>Run Migration</title></head>
-<body>
-<h1>Database Migration</h1>
-<p>This will create job_notes and job_photos tables.</p>
-<form method="POST"><button type="submit">Run Migration</button></form>
+<html><head><title>Admin Tools</title></head>
+<body style="font-family:sans-serif;max-width:600px;margin:40px auto;padding:20px">
+<h1>Admin Tools</h1>
+
+<div style="background:#f3f4f6;padding:20px;border-radius:8px;margin-bottom:20px">
+    <h3>Database Migration</h3>
+    <p>Create job_notes and job_photos tables.</p>
+    <form method="POST">
+        <button type="submit" style="padding:10px 20px;background:#10b981;color:white;border:none;border-radius:6px;cursor:pointer">Run Migration</button>
+    </form>
+</div>
+
+<div style="background:#f3f4f6;padding:20px;border-radius:8px">
+    <h3>Fix Photo Access</h3>
+    <p>Make S3 bucket public so uploaded photos are viewable.</p>
+    <form action="/admin/make-bucket-public" method="POST">
+        <button type="submit" style="padding:10px 20px;background:#3b82f6;color:white;border:none;border-radius:6px;cursor:pointer">Make Bucket Public</button>
+    </form>
+</div>
+
 </body></html>"""
 
 
