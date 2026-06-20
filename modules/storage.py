@@ -56,12 +56,12 @@ def upload_file(file_data, filename, content_type='application/octet-stream', fo
     unique_name = f"{folder}/{uuid.uuid4().hex[:16]}.{file_ext}" if file_ext else f"{folder}/{uuid.uuid4().hex[:16]}"
 
     try:
+        # Upload without ACL - Railway uses public buckets by default
         s3.put_object(
             Bucket=S3_BUCKET_NAME,
             Key=unique_name,
             Body=file_data,
-            ContentType=content_type,
-            ACL='public-read'  # Make file publicly accessible
+            ContentType=content_type
         )
 
         # Construct public URL
@@ -113,3 +113,34 @@ def delete_file(file_url):
 def is_configured():
     """Check if S3 storage is properly configured."""
     return all([S3_BUCKET_NAME, S3_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY])
+
+def make_bucket_public():
+    """Set bucket policy to allow public read access."""
+    if not S3_BUCKET_NAME:
+        logger.error("S3_BUCKET_NAME not configured")
+        return False
+
+    s3 = get_s3_client()
+    if not s3:
+        return False
+
+    try:
+        policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Sid": "PublicReadGetObject",
+                    "Effect": "Allow",
+                    "Principal": "*",
+                    "Action": "s3:GetObject",
+                    "Resource": f"arn:aws:s3:::{S3_BUCKET_NAME}/*"
+                }
+            ]
+        }
+        import json
+        s3.put_bucket_policy(Bucket=S3_BUCKET_NAME, Policy=json.dumps(policy))
+        logger.info(f"Bucket {S3_BUCKET_NAME} is now public")
+        return True
+    except Exception as e:
+        logger.error(f"Error setting bucket policy: {e}")
+        return False

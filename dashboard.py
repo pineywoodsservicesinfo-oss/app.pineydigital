@@ -993,6 +993,18 @@ def admin_check_photos(job_id):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/admin/make-bucket-public", methods=["POST"])
+@login_required
+def admin_make_bucket_public():
+    """Make S3 bucket public for photo access."""
+    from modules.storage import make_bucket_public
+    success = make_bucket_public()
+    if success:
+        return jsonify({"status": "success", "message": "Bucket is now public"})
+    else:
+        return jsonify({"status": "error", "message": "Failed to make bucket public"}), 500
+
+
 # ═════════════════════════════════════════════════════════════════
 # HEALTH & ERROR HANDLERS
 # ═════════════════════════════════════════════════════════════════
