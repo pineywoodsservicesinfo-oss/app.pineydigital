@@ -881,7 +881,7 @@ def login():
             else:
                 session["logged_in"] = True
                 session["csrf_token"] = generate_csrf_token()
-                return redirect(url_for("overview"))
+                return redirect(url_for("fieldpulse_dashboard"))
 
     # Generate and store CSRF token in session for validation
     csrf_token = generate_csrf_token()
