@@ -115,8 +115,44 @@ def is_configured():
     """Check if S3 storage is properly configured."""
     return all([S3_BUCKET_NAME, S3_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY])
 
+def get_presigned_url(file_url, expiration=3600):
+    """Generate a presigned URL for temporary access to a private object.
+
+    Args:
+        file_url: Full public URL of the file
+        expiration: URL expiration time in seconds (default: 1 hour)
+
+    Returns:
+        Presigned URL that provides temporary access
+    """
+    if not S3_BUCKET_NAME or not file_url:
+        return file_url
+
+    s3 = get_s3_client()
+    if not s3:
+        return file_url
+
+    try:
+        # Extract key from URL
+        prefix = f"{S3_ENDPOINT_URL}/{S3_BUCKET_NAME}/"
+        if file_url.startswith(prefix):
+            key = file_url[len(prefix):]
+        else:
+            key = file_url.split(f"/{S3_BUCKET_NAME}/")[-1]
+
+        # Generate presigned URL
+        url = s3.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': S3_BUCKET_NAME, 'Key': key},
+            ExpiresIn=expiration
+        )
+        return url
+    except Exception as e:
+        logger.error(f"Error generating presigned URL: {e}")
+        return file_url
+
 def make_bucket_public():
-    """Make all existing objects public by re-uploading with public ACL."""
+    """Make all existing objects public using put_object_acl."""
     if not S3_BUCKET_NAME:
         logger.error("S3_BUCKET_NAME not configured")
         return False
@@ -128,19 +164,22 @@ def make_bucket_public():
     try:
         # List all objects and make them public
         response = s3.list_objects_v2(Bucket=S3_BUCKET_NAME)
+        count = 0
         if 'Contents' in response:
             for obj in response['Contents']:
                 key = obj['Key']
-                # Copy object to itself with public-read ACL
-                s3.copy_object(
-                    Bucket=S3_BUCKET_NAME,
-                    CopySource=f"{S3_BUCKET_NAME}/{key}",
-                    Key=key,
-                    MetadataDirective='COPY',
-                    ACL='public-read'
-                )
-                logger.info(f"Made public: {key}")
-        logger.info(f"Bucket {S3_BUCKET_NAME} objects are now public")
+                try:
+                    # Try to set ACL directly
+                    s3.put_object_acl(
+                        Bucket=S3_BUCKET_NAME,
+                        Key=key,
+                        ACL='public-read'
+                    )
+                    logger.info(f"Made public: {key}")
+                    count += 1
+                except Exception as acl_err:
+                    logger.warning(f"Could not set ACL for {key}: {acl_err}")
+        logger.info(f"Made {count} objects public in {S3_BUCKET_NAME}")
         return True
     except Exception as e:
         logger.error(f"Error making objects public: {e}")

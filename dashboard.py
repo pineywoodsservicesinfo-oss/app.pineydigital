@@ -47,7 +47,7 @@ from modules.security import (
 )
 
 # Import storage module for S3 uploads
-from modules.storage import upload_file, is_configured as storage_configured
+from modules.storage import upload_file, is_configured as storage_configured, get_presigned_url
 
 app = Flask(__name__)
 
@@ -1749,7 +1749,8 @@ def fieldpulse_job_detail(job_id):
             type_class = photo_type_colors.get(photo.get('photo_type', 'progress'), 'bg-slate-700 text-slate-400')
             type_label = escape(photo.get('photo_type', 'progress').replace('_', ' ').title())
             caption = escape(photo.get('caption', '') or '')
-            photo_url = photo.get('photo_url', '')
+            # Use presigned URL for viewing (bypasses access restrictions)
+            photo_url = get_presigned_url(photo.get('photo_url', ''), expiration=3600)
             photos_html += f'''
             <div class="bg-slate-700/50 rounded-lg overflow-hidden border border-slate-600">
                 <div class="relative group">
