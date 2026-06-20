@@ -1517,25 +1517,55 @@ def fieldpulse_job_detail(job_id):
                     if file_ext not in allowed_extensions:
                         error = f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
                     else:
-                        # For now, store as base64 data URL (in production, use S3/Railway Buckets)
-                        import base64
+                        # Read file data
                         photo_data = photo_file.read()
-                        photo_base64 = base64.b64encode(photo_data).decode('utf-8')
-                        mime_type = photo_file.content_type or 'image/jpeg'
-                        photo_url = f"data:{mime_type};base64,{photo_base64}"
+                        file_size = len(photo_data)
 
-                        photo_type = request.form.get("photo_type", "progress")
-                        caption = request.form.get("photo_caption", "").strip()
+                        # Check file size (5MB limit)
+                        if file_size > 5 * 1024 * 1024:
+                            error = f"File too large ({file_size / 1024 / 1024:.1f}MB). Max size: 5MB"
+                        else:
+                            # Resize image if too large (max 1200px width/height)
+                            try:
+                                from PIL import Image
+                                import io
 
-                        try:
-                            query_db("""INSERT INTO job_photos
-                                       (job_id, photo_url, photo_type, caption, created_at)
-                                       VALUES (%s, %s, %s, %s, NOW())""",
-                                    (job_id, photo_url, photo_type, caption if caption else None))
-                            success = "Photo uploaded successfully!"
-                        except Exception as e:
-                            logger.error(f"Error uploading photo: {e}")
-                            error = f"Error uploading photo: {str(e)}"
+                                img = Image.open(io.BytesIO(photo_data))
+                                max_size = 1200
+                                if img.width > max_size or img.height > max_size:
+                                    ratio = min(max_size / img.width, max_size / img.height)
+                                    new_size = (int(img.width * ratio), int(img.height * ratio))
+                                    img = img.resize(new_size, Image.Resampling.LANCZOS)
+
+                                # Convert to JPEG for consistency and smaller size
+                                output = io.BytesIO()
+                                if img.mode in ('RGBA', 'P'):
+                                    img = img.convert('RGB')
+                                img.save(output, format='JPEG', quality=85, optimize=True)
+                                photo_data = output.getvalue()
+                            except ImportError:
+                                # PIL not available, use original
+                                pass
+                            except Exception as img_err:
+                                logger.warning(f"Image resize failed: {img_err}, using original")
+
+                            # Store as base64 data URL
+                            import base64
+                            photo_base64 = base64.b64encode(photo_data).decode('utf-8')
+                            photo_url = f"data:image/jpeg;base64,{photo_base64}"
+
+                            photo_type = request.form.get("photo_type", "progress")
+                            caption = request.form.get("photo_caption", "").strip()
+
+                            try:
+                                query_db("""INSERT INTO job_photos
+                                           (job_id, photo_url, photo_type, caption, created_at)
+                                           VALUES (%s, %s, %s, %s, NOW())""",
+                                        (job_id, photo_url, photo_type, caption if caption else None))
+                                success = f"Photo uploaded successfully! ({len(photo_data) / 1024:.0f}KB)"
+                            except Exception as e:
+                                logger.error(f"Error uploading photo: {e}")
+                                error = f"Error uploading photo: {str(e)}"
 
     # Get notes for this job
     notes = get_job_notes(job_id)
@@ -1791,9 +1821,9 @@ def fieldpulse_job_detail(job_id):
                         </div>
                     </div>
 
-                    <!-- Job Notes -->
+                    <!-- Job Notes & Photos -->
                     <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
-                        <h3 class="text-lg font-medium text-white mb-4">Job Notes</h3>
+                        <h3 class="text-lg font-medium text-white mb-4">Job Notes & Photos</h3>
 
                         <!-- Existing Notes -->
                         <div class="space-y-3 mb-6 max-h-64 overflow-y-auto">
@@ -1801,7 +1831,7 @@ def fieldpulse_job_detail(job_id):
                         </div>
 
                         <!-- Add Note Form -->
-                        <form method="POST" class="space-y-3">
+                        <form method="POST" class="space-y-3 mb-8 pb-8 border-b border-slate-700">
                             <input type="hidden" name="action" value="add_note">
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Add a Note</label>
@@ -1810,24 +1840,20 @@ def fieldpulse_job_detail(job_id):
                             </div>
                             <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition">Add Note</button>
                         </form>
-                    </div>
-
-                    <!-- Job Photos -->
-                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
-                        <h3 class="text-lg font-medium text-white mb-4">Job Photos</h3>
 
                         <!-- Photo Gallery -->
-                        <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6 max-h-96 overflow-y-auto">
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 max-h-96 overflow-y-auto">
                             {photos_html}
                         </div>
 
                         <!-- Upload Photo Form -->
-                        <form method="POST" enctype="multipart/form-data" class="space-y-3">
+                        <form method="POST" enctype="multipart/form-data" class="space-y-3 border-t border-slate-700 pt-6">
                             <input type="hidden" name="action" value="upload_photo">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <h4 class="text-sm font-medium text-slate-300 mb-3">Upload Photo</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
-                                    <label class="block text-sm font-medium text-slate-300 mb-2">Photo Type</label>
-                                    <select name="photo_type" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                    <label class="block text-xs font-medium text-slate-400 mb-1">Photo Type</label>
+                                    <select name="photo_type" class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
                                         <option value="progress">Progress</option>
                                         <option value="before">Before</option>
                                         <option value="after">After</option>
@@ -1835,18 +1861,19 @@ def fieldpulse_job_detail(job_id):
                                     </select>
                                 </div>
                                 <div class="md:col-span-2">
-                                    <label class="block text-sm font-medium text-slate-300 mb-2">Caption (optional)</label>
+                                    <label class="block text-xs font-medium text-slate-400 mb-1">Caption (optional)</label>
                                     <input type="text" name="photo_caption" placeholder="Describe the photo..."
-                                        class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                        class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
                                 </div>
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Select Photo</label>
-                                <input type="file" name="photo" accept="image/*" required
-                                    class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:bg-emerald-500 file:text-white hover:file:bg-emerald-600">
-                                <p class="text-xs text-slate-500 mt-1">Max file size: 5MB. Supported: JPG, PNG, GIF, WebP</p>
+                            <div class="flex items-end gap-4">
+                                <div class="flex-1">
+                                    <input type="file" name="photo" accept="image/*" required
+                                        class="w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:bg-emerald-500 file:text-white hover:file:bg-emerald-600">
+                                    <p class="text-xs text-slate-500 mt-1">Max 5MB. JPG, PNG, GIF, WebP</p>
+                                </div>
+                                <button type="submit" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-medium transition">Upload</button>
                             </div>
-                            <button type="submit" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-medium transition">Upload Photo</button>
                         </form>
                     </div>
 
