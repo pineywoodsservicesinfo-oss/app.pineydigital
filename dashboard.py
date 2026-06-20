@@ -975,6 +975,21 @@ def admin_migrate():
 </body></html>"""
 
 
+@app.route("/admin/check-photos/<job_id>")
+@login_required
+def admin_check_photos(job_id):
+    """Debug endpoint to check photos for a job."""
+    try:
+        photos = query_db("SELECT id, photo_type, LENGTH(photo_url) as url_length, caption, created_at FROM job_photos WHERE job_id = %s", (job_id,))
+        return jsonify({
+            "job_id": job_id,
+            "photo_count": len(photos) if photos else 0,
+            "photos": [{"id": str(p["id"]), "type": p["photo_type"], "url_length": p["url_length"], "caption": p["caption"], "created_at": str(p["created_at"])} for p in photos] if photos else []
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ═════════════════════════════════════════════════════════════════
 # HEALTH & ERROR HANDLERS
 # ═════════════════════════════════════════════════════════════════
