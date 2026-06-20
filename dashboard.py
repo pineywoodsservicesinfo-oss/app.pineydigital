@@ -863,12 +863,11 @@ def login():
     error = ""
 
     if request.method == "POST":
-        # Validate CSRF token (only if session has one - for login we generate fresh)
+        # Validate CSRF token
         session_token = session.get('csrf_token')
-        if session_token:
-            form_token = request.form.get('csrf_token')
-            if not form_token or not validate_csrf_token(form_token, session_token):
-                error = "Invalid or missing CSRF token."
+        form_token = request.form.get('csrf_token')
+        if not form_token or not session_token or not validate_csrf_token(form_token, session_token):
+            error = "Invalid or missing CSRF token."
 
         if not error:
             email = request.form.get("email", "").strip().lower()
@@ -884,7 +883,10 @@ def login():
                 session["csrf_token"] = generate_csrf_token()
                 return redirect(url_for("overview"))
 
-    csrf_token_input = f'<input type="hidden" name="csrf_token" value="{generate_csrf_token()}">'
+    # Generate and store CSRF token in session for validation
+    csrf_token = generate_csrf_token()
+    session['csrf_token'] = csrf_token
+    csrf_token_input = f'<input type="hidden" name="csrf_token" value="{csrf_token}">'
 
     # Build HTML response directly - avoid Jinja2 template issues with CSS braces
     error_html = f'<p class="error">{error}</p>' if error else ''
