@@ -42,7 +42,7 @@ from migrations.db_config import db_config, get_db_connection
 # Import security modules
 from modules.security import (
     generate_csrf_token, validate_csrf_token,
-    get_security_headers
+    get_security_headers, verify_password
 )
 
 app = Flask(__name__)
@@ -57,8 +57,7 @@ if not DASHBOARD_SECRET:
     DASHBOARD_SECRET = secrets.token_hex(32)
 
 if not DASHBOARD_PASS:
-    print("WARNING: DASHBOARD_PASSWORD not set. Using insecure default. Set DASHBOARD_PASSWORD in .env!")
-    DASHBOARD_PASS = "CHANGE_ME"
+    raise ValueError("DASHBOARD_PASSWORD environment variable must be set. Application cannot start without a secure password.")
 
 app.secret_key = DASHBOARD_SECRET
 
@@ -73,9 +72,6 @@ else:
 from modules.database import init_db, seed_leads_from_csv
 init_db()
 seed_leads_from_csv()
-
-# Initialize job_notes and job_photos tables
-init_job_tables()
 
 # Seed FieldPulse demo data if empty
 def seed_fieldpulse_demo():
@@ -226,6 +222,9 @@ def init_job_tables():
 
     except Exception as e:
         logger.error(f"Error initializing job tables: {e}")
+
+# Initialize job tables after function is defined
+init_job_tables()
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -513,7 +512,7 @@ def fieldpulse_login():
             one=True
         )
 
-        if user and password == "demo123":
+        if user and verify_password(password, user.get('password_hash', '')):
             session["fp_logged_in"] = True
             session["fp_user_id"] = user['id']
             session["fp_business_id"] = user['business_id']
@@ -567,7 +566,6 @@ def fieldpulse_login():
                     <input type="password" name="password" required
                         class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
                         placeholder="••••••••">
-                    <p class="text-xs text-slate-500 mt-2">Demo password: <code class="text-emerald-400">demo123</code></p>
                 </div>
 
                 <button type="submit"
@@ -1867,68 +1865,68 @@ def fieldpulse_job_detail(job_id):
                         </div>
                     </div>
 
-                    <!-- Job Notes & Photos -->
-                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
-                        <h3 class="text-lg font-medium text-white mb-4">Job Notes & Photos</h3>
-
-                        <!-- Existing Notes -->
-                        <div class="space-y-3 mb-6 max-h-64 overflow-y-auto">
-                            {notes_html}
-                        </div>
-
-                        <!-- Add Note Form -->
-                        <form method="POST" class="space-y-3 mb-8 pb-8 border-b border-slate-700">
-                            <input type="hidden" name="action" value="add_note">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Add a Note</label>
-                                <textarea name="note" rows="3" placeholder="Enter note details..." required
-                                    class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"></textarea>
-                            </div>
-                            <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition">Add Note</button>
-                        </form>
-
-                        <!-- Photo Gallery -->
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 max-h-96 overflow-y-auto">
-                            {photos_html}
-                        </div>
-
-                        <!-- Upload Photo Form -->
-                        <form method="POST" enctype="multipart/form-data" class="space-y-3 border-t border-slate-700 pt-6">
-                            <input type="hidden" name="action" value="upload_photo">
-                            <h4 class="text-sm font-medium text-slate-300 mb-3">Upload Photo</h4>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-400 mb-1">Photo Type</label>
-                                    <select name="photo_type" class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
-                                        <option value="progress">Progress</option>
-                                        <option value="before">Before</option>
-                                        <option value="after">After</option>
-                                        <option value="issue">Issue</option>
-                                    </select>
-                                </div>
-                                <div class="md:col-span-2">
-                                    <label class="block text-xs font-medium text-slate-400 mb-1">Caption (optional)</label>
-                                    <input type="text" name="photo_caption" placeholder="Describe the photo..."
-                                        class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
-                                </div>
-                            </div>
-                            <div class="flex items-end gap-4">
-                                <div class="flex-1">
-                                    <input type="file" name="photo" accept="image/*" required
-                                        class="w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:bg-emerald-500 file:text-white hover:file:bg-emerald-600">
-                                    <p class="text-xs text-slate-500 mt-1">Max 5MB. JPG, PNG, GIF, WebP</p>
-                                </div>
-                                <button type="submit" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-medium transition">Upload</button>
-                            </div>
-                        </form>
-                    </div>
-
-                    <!-- Actions -->
+                    <!-- Actions (end of main form) -->
                     <div class="flex gap-4">
                         <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition">Save Changes</button>
                         <a href="/fieldpulse/jobs" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition">Cancel</a>
                     </div>
                 </form>
+
+                <!-- Job Notes & Photos (separate forms - not nested) -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 mt-6">
+                    <h3 class="text-lg font-medium text-white mb-4">Job Notes & Photos</h3>
+
+                    <!-- Existing Notes -->
+                    <div class="space-y-3 mb-6 max-h-64 overflow-y-auto">
+                        {notes_html}
+                    </div>
+
+                    <!-- Add Note Form (separate, not nested) -->
+                    <form method="POST" class="space-y-3 mb-8 pb-8 border-b border-slate-700">
+                        <input type="hidden" name="action" value="add_note">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Add a Note</label>
+                            <textarea name="note" rows="3" placeholder="Enter note details..." required
+                                class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"></textarea>
+                        </div>
+                        <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition">Add Note</button>
+                    </form>
+
+                    <!-- Photo Gallery -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 max-h-96 overflow-y-auto">
+                        {photos_html}
+                    </div>
+
+                    <!-- Upload Photo Form (separate, not nested) -->
+                    <form method="POST" enctype="multipart/form-data" class="space-y-3 border-t border-slate-700 pt-6">
+                        <input type="hidden" name="action" value="upload_photo">
+                        <h4 class="text-sm font-medium text-slate-300 mb-3">Upload Photo</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-400 mb-1">Photo Type</label>
+                                <select name="photo_type" class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                    <option value="progress">Progress</option>
+                                    <option value="before">Before</option>
+                                    <option value="after">After</option>
+                                    <option value="issue">Issue</option>
+                                </select>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-medium text-slate-400 mb-1">Caption (optional)</label>
+                                <input type="text" name="photo_caption" placeholder="Describe the photo..."
+                                    class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            </div>
+                        </div>
+                        <div class="flex items-end gap-4">
+                            <div class="flex-1">
+                                <input type="file" name="photo" accept="image/*" required
+                                    class="w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:bg-emerald-500 file:text-white hover:file:bg-emerald-600">
+                                <p class="text-xs text-slate-500 mt-1">Max 5MB. JPG, PNG, GIF, WebP</p>
+                            </div>
+                            <button type="submit" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-medium transition">Upload</button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </main>
     </div>
