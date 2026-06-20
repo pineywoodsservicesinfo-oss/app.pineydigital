@@ -920,20 +920,20 @@ def health_check():
 @app.errorhandler(404)
 def not_found(error):
     """Handle 404 errors."""
-    return render_template_string("""<!DOCTYPE html>
+    return """<!DOCTYPE html>
 <html><head><title>404 — Not Found</title>
-<style>body{{font-family:sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center}}</style>
-</head><body><div><h1>404</h1><p>Page not found</p><a href="/fieldpulse" style="color:#10b981">← Go to Dashboard</a></div></body></html>"""), 404
+<style>body{font-family:sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center}</style>
+</head><body><div><h1>404</h1><p>Page not found</p><a href="/fieldpulse" style="color:#10b981">← Go to Dashboard</a></div></body></html>""", 404
 
 
 @app.errorhandler(500)
 def server_error(error):
     """Handle 500 errors."""
     logger.error(f"500 error: {error}")
-    return render_template_string("""<!DOCTYPE html>
+    return """<!DOCTYPE html>
 <html><head><title>500 — Server Error</title>
-<style>body{{font-family:sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center}}</style>
-</head><body><div><h1>500</h1><p>Server error</p><a href="/fieldpulse" style="color:#10b981">← Go to Dashboard</a></div></body></html>"""), 500
+<style>body{font-family:sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center}</style>
+</head><body><div><h1>500</h1><p>Server error</p><a href="/fieldpulse" style="color:#10b981">← Go to Dashboard</a></div></body></html>""", 500
 
 
 # ═════════════════════════════════════════════════════════════════
