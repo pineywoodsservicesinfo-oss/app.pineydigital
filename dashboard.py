@@ -181,49 +181,6 @@ def query_db(sql, params=(), one=False):
         return None if one else []
 
 
-def init_job_tables():
-    """Initialize job_notes and job_photos tables if they don't exist."""
-    try:
-        # Check if tables exist
-        tables = query_db("""
-            SELECT table_name FROM information_schema.tables
-            WHERE table_schema = 'public'
-            AND table_name IN ('job_notes', 'job_photos')
-        """)
-
-        existing_tables = {t['table_name'] for t in (tables or [])}
-
-        if 'job_notes' not in existing_tables:
-            query_db("""
-                CREATE TABLE job_notes (
-                    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                    job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
-                    note TEXT NOT NULL,
-                    created_by VARCHAR(100),
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-                )
-            "", one=True)
-            query_db("CREATE INDEX idx_notes_job ON job_notes(job_id)", one=True)
-            logger.info("Created job_notes table")
-
-        if 'job_photos' not in existing_tables:
-            query_db("""
-                CREATE TABLE job_photos (
-                    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                    job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
-                    photo_url TEXT NOT NULL,
-                    photo_type VARCHAR(50) DEFAULT 'progress',
-                    caption TEXT,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-                )
-            "", one=True)
-            query_db("CREATE INDEX idx_photos_job ON job_photos(job_id)", one=True)
-            logger.info("Created job_photos table")
-
-    except Exception as e:
-        logger.error(f"Error initializing job tables: {e}")
-
-
 # ═════════════════════════════════════════════════════════════════
 # AUTH DECORATORS
 # ═════════════════════════════════════════════════════════════════
@@ -902,7 +859,7 @@ def login():
             session["logged_in"] = True
             return redirect(url_for("overview"))
 
-    return render_template_string(f"""<!DOCTYPE html>
+    return render_template_string("""<!DOCTYPE html>
 <html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Admin Login</title>
@@ -917,7 +874,7 @@ button{{width:100%;padding:12px;background:#10b981;color:#fff;border:none;border
 </style></head><body>
 <div class="card">
 <h1>Admin Login</h1>
-{f'<p class="error">{error}</p>' if error else ''}
+""" + ('<p class="error">' + error + '</p>' if error else '') + """
 <form method="POST">
 <input type="email" name="email" placeholder="Email" required>
 <input type="password" name="password" placeholder="Password" required>
@@ -948,8 +905,8 @@ def admin_migrate():
                     created_by VARCHAR(100),
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                 )
-            "", one=True)
-            query_db("CREATE INDEX IF NOT EXISTS idx_notes_job ON job_notes(job_id)", one=True)
+            """)
+            query_db("CREATE INDEX IF NOT EXISTS idx_notes_job ON job_notes(job_id)")
 
             # Create job_photos table with TEXT for photo_url
             query_db("""
@@ -961,16 +918,16 @@ def admin_migrate():
                     caption TEXT,
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                 )
-            "", one=True)
-            query_db("CREATE INDEX IF NOT EXISTS idx_photos_job ON job_photos(job_id)", one=True)
+            """)
+            query_db("CREATE INDEX IF NOT EXISTS idx_photos_job ON job_photos(job_id)")
 
             return jsonify({"status": "success", "message": "Migration completed successfully!"})
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)}), 500
 
     return """<!DOCTYPE html>
-<html><head><title>Run Migration</title></style>
-</head><body>
+<html><head><title>Run Migration</title></head>
+<body>
 <h1>Database Migration</h1>
 <p>This will create job_notes and job_photos tables.</p>
 <form method="POST"><button type="submit">Run Migration</button></form>
