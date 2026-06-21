@@ -39,9 +39,28 @@ def get_clerk_jwks() -> Optional[Dict]:
         return None
 
     try:
+        import base64
+
+        # Extract domain from publishable key
+        if CLERK_PUBLISHABLE_KEY.startswith("pk_test_"):
+            encoded = CLERK_PUBLISHABLE_KEY[8:]
+        elif CLERK_PUBLISHABLE_KEY.startswith("pk_live_"):
+            encoded = CLERK_PUBLISHABLE_KEY[8:]
+        else:
+            encoded = CLERK_PUBLISHABLE_KEY
+
+        # Add padding if needed
+        padding = 4 - len(encoded) % 4
+        if padding != 4:
+            encoded += "=" * padding
+
+        domain = base64.b64decode(encoded).decode("utf-8")
+        domain = domain.replace("\x00", "").rstrip("$")
+        domain = domain.replace(".clerk.accounts.dev", ".accounts.dev")
+        clerk_issuer = f"https://{domain}"
+
         # Clerk JWKS endpoint
-        # The issuer domain is extracted from the publishable key
-        jwks_url = "https://clerk.clerk.dev/.well-known/jwks.json"
+        jwks_url = f"{clerk_issuer}/.well-known/jwks.json"
 
         # Alternative: use Clerk Backend API
         headers = {"Authorization": f"Bearer {CLERK_SECRET_KEY}"} if CLERK_SECRET_KEY else {}
@@ -86,14 +105,18 @@ def verify_clerk_jwt(token: str) -> Optional[Dict[str, Any]]:
         # In production, use proper JWKS verification
         issuer = unverified.get("iss", "")
 
-        if "clerk" in issuer.lower():
-            # This is a Clerk token - extract user info
+        if "clerk" in issuer.lower() or "accounts.dev" in issuer.lower():
+            # This is a Clerk token - return all claims for flexibility with custom templates
             return {
-                "sub": unverified.get("sub"),  # User ID
-                "email": unverified.get("email"),
-                "first_name": unverified.get("first_name"),
-                "last_name": unverified.get("last_name"),
+                "sub": unverified.get("sub") or unverified.get("user_id"),  # User ID
+                "email": unverified.get("email") or unverified.get("email_address"),
+                "first_name": unverified.get("first_name") or unverified.get("firstName"),
+                "last_name": unverified.get("last_name") or unverified.get("lastName"),
                 "org_id": unverified.get("org_id"),  # Organization ID (for multi-tenant)
+                "org_role": unverified.get("org_role"),  # Organization role
+                "org_slug": unverified.get("org_slug"),  # Organization slug
+                # Include raw claims for debugging and template flexibility
+                "_raw": unverified,
             }
 
     except jwt.ExpiredSignatureError:
