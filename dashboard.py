@@ -967,6 +967,7 @@ def clerk_login_page():
                 }});
 
                 const data = await response.json();
+                console.log('Verify response:', response.status, data);
 
                 if (response.ok && data.success) {{
                     console.log('Auth successful:', data);
@@ -974,7 +975,7 @@ def clerk_login_page():
                     const redirectTo = data.redirect || dashboardUrl;
                     window.location.href = redirectTo;
                 }} else {{
-                    throw new Error(data.error || 'Authentication failed');
+                    throw new Error(data.error || `Authentication failed (${response.status})`);
                 }}
 
             }} catch (err) {{
@@ -989,6 +990,8 @@ def clerk_login_page():
             const errorDiv = document.getElementById('error');
             errorDiv.textContent = msg;
             errorDiv.classList.remove('hidden');
+            // Also show as alert for visibility during debugging
+            alert('Login Error: ' + msg);
         }}
 
         // Initialize when DOM is ready
