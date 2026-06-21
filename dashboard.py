@@ -4,7 +4,7 @@ dashboard.py — FieldPulse Field Service Management
 Cleaned up version - focuses on SaaS functionality
 
 Run with: python dashboard.py
-Visit:    http://localhost:5000/fieldpulse
+Visit:    http://localhost:5000/login
 
 Features:
   - Business management
@@ -537,20 +537,19 @@ body{font-family:'Inter',sans-serif;}
 # FIELD PULSE ROUTES
 # ═════════════════════════════════════════════════════════════════
 
-@app.route("/fieldpulse")
+@app.route("/")
 def fieldpulse_redirect():
     """Redirect to FieldPulse dashboard."""
     return redirect(url_for("fieldpulse_dashboard"))
 
 
-@app.route("/fieldpulse/login")
+@app.route("/login")
 def fieldpulse_login():
     """FieldPulse login - shows Clerk login page directly."""
-    # Just call the clerk login page function directly
     return clerk_login_page()
 
 
-@app.route("/fieldpulse/legacy-login", methods=["GET", "POST"])
+@app.route("/legacy-login", methods=["GET", "POST"])
 def fieldpulse_legacy_login():
     """Legacy login form - bypasses Clerk redirect for admin access."""
     error = ""
@@ -628,7 +627,88 @@ def fieldpulse_legacy_login():
             </form>
 
             <p class="text-center text-slate-500 text-sm mt-6">
-                <a href="/fieldpulse/clerk-login" class="text-emerald-400 hover:text-emerald-300">← Back to Clerk login</a>
+                <a href="/clerk-login" class="text-emerald-400 hover:text-emerald-300">← Back to Clerk login</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>""")
+    error = ""
+
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+
+        user = query_db(
+            "SELECT * FROM users WHERE email = %s",
+            (email,),
+            one=True
+        )
+
+        if user and verify_password(password, user.get('password_hash', '')):
+            session["fp_logged_in"] = True
+            session["fp_user_id"] = user['id']
+            session["fp_business_id"] = user['business_id']
+            session["fp_user_name"] = user.get('name', email.split('@')[0])
+            session["csrf_token"] = generate_csrf_token()
+
+            query_db(
+                "UPDATE users SET last_login_at = NOW() WHERE id = %s",
+                (user['id'],)
+            )
+
+            return redirect(url_for("fieldpulse_dashboard"))
+        else:
+            error = "Invalid email or password."
+
+    return render_template_string(f"""<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldPulse — Legacy Login</title>
+    {TAILWIND_CDN}
+    {FIELD_PULSE_CSS}
+</head>
+<body class="bg-slate-900 min-h-screen flex items-center justify-center">
+    <div class="w-full max-w-md px-6">
+        <div class="bg-slate-800 rounded-2xl shadow-2xl p-8 fade-in">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl mx-auto mb-4 flex items-center justify-center">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <h1 class="text-2xl font-bold text-white">FieldPulse</h1>
+                <p class="text-slate-400 mt-1">Legacy Login (Admin Only)</p>
+            </div>
+
+            {f'<div class="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">{error}</div>' if error else ''}
+
+            <form method="POST" class="space-y-5">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Email</label>
+                    <input type="email" name="email" required
+                        class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
+                        placeholder="owner@company.com"
+                        value="owner@demolandscaping.com">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Password</label>
+                    <input type="password" name="password" required
+                        class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
+                        placeholder="••••••••">
+                </div>
+
+                <button type="submit"
+                    class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition shadow-lg shadow-emerald-500/25">
+                    Sign In
+                </button>
+            </form>
+
+            <p class="text-center text-slate-500 text-sm mt-6">
+                <a href="/clerk-login" class="text-emerald-400 hover:text-emerald-300">← Back to Clerk login</a>
             </p>
         </div>
     </div>
@@ -638,7 +718,7 @@ def fieldpulse_legacy_login():
 
 # ── CLERK AUTHENTICATION ───────────────────────────────────────────
 
-@app.route("/fieldpulse/clerk-login")
+@app.route("/clerk-login")
 def clerk_login_page():
     """Clerk authentication - uses JWT token pattern with modal sign-in."""
     clerk_pub_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
@@ -709,7 +789,7 @@ def clerk_login_page():
             <div id="error" class="hidden mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm"></div>
 
             <p class="text-center text-slate-600 text-xs mt-6">
-                <a href="/fieldpulse/legacy-login" class="hover:text-slate-500">Admin: Use legacy login</a>
+                <a href="/legacy-login" class="hover:text-slate-500">Admin: Use legacy login</a>
             </p>
         </div>
     </div>
@@ -722,40 +802,41 @@ def clerk_login_page():
     </div>
 
     <!-- Load Clerk JS SDK -->
+    <script
+        async
+        crossorigin="anonymous"
+        data-clerk-publishable-key="{clerk_pub_key}"
+        src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+        type="module"
+    ></script>
+
     <script type="module">
         const clerkPubKey = "{clerk_pub_key}";
-        const apiUrl = "{app_domain}/fieldpulse/api/clerk-verify";
-        const dashboardUrl = "{app_domain}/fieldpulse/dashboard";
-        const onboardingUrl = "{app_domain}/fieldpulse/clerk-onboarding";
-
-        // Wait for Clerk to load
-        async function loadClerk() {{
-            // Load Clerk script dynamically
-            if (!window.Clerk) {{
-                await new Promise((resolve, reject) => {{
-                    const script = document.createElement('script');
-                    script.src = 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
-                    script.type = 'module';
-                    script.onload = resolve;
-                    script.onerror = reject;
-                    document.head.appendChild(script);
-                }});
-            }}
-
-            // Wait for Clerk to be available
-            while (!window.Clerk) {{
-                await new Promise(r => setTimeout(r, 100));
-            }}
-
-            return window.Clerk;
-        }}
+        const apiUrl = "{app_domain}/api/clerk-verify";
+        const dashboardUrl = "{app_domain}/dashboard";
+        const onboardingUrl = "{app_domain}/clerk-onboarding";
 
         async function initAuth() {{
-            try {{
-                const Clerk = await loadClerk();
+            console.log('Initializing Clerk auth...');
 
-                // Initialize Clerk
-                const clerk = new Clerk(clerkPubKey);
+            // Wait for Clerk to be available on window
+            let attempts = 0;
+            while (!window.Clerk && attempts < 50) {{
+                await new Promise(r => setTimeout(r, 100));
+                attempts++;
+            }}
+
+            if (!window.Clerk) {{
+                showError('Clerk SDK failed to load. Please refresh the page.');
+                console.error('Clerk not found on window after waiting');
+                return;
+            }}
+
+            console.log('Clerk found, initializing...');
+
+            try {{
+                const clerk = window.Clerk;
+
                 await clerk.load({{
                     routing: 'virtual',
                     appearance: {{
@@ -771,24 +852,43 @@ def clerk_login_page():
                     }}
                 }});
 
+                console.log('Clerk loaded successfully');
+
                 // Check if already signed in
                 if (clerk.user) {{
+                    console.log('User already signed in:', clerk.user);
                     await handleAuthenticatedUser(clerk);
                     return;
                 }}
 
-                // Set up sign in button
-                document.getElementById('sign-in-btn').addEventListener('click', () => {{
+                // Enable buttons
+                const signInBtn = document.getElementById('sign-in-btn');
+                const signUpBtn = document.getElementById('sign-up-btn');
+
+                if (!signInBtn || !signUpBtn) {{
+                    console.error('Buttons not found in DOM');
+                    return;
+                }}
+
+                signInBtn.addEventListener('click', (e) => {{
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Sign in button clicked');
                     openClerkModal(clerk, 'signIn');
                 }});
 
-                // Set up sign up button
-                document.getElementById('sign-up-btn').addEventListener('click', () => {{
+                signUpBtn.addEventListener('click', (e) => {{
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Sign up button clicked');
                     openClerkModal(clerk, 'signUp');
                 }});
 
+                console.log('Event listeners attached to buttons');
+
                 // Listen for auth state changes
                 clerk.addListener(async ({{ user, session }}) => {{
+                    console.log('Auth state changed:', {{ user, session }});
                     if (user && session) {{
                         await handleAuthenticatedUser(clerk);
                     }}
@@ -801,23 +901,36 @@ def clerk_login_page():
         }}
 
         function openClerkModal(clerk, mode) {{
+            console.log('Opening Clerk modal:', mode);
             const modal = document.getElementById('clerk-modal');
             const target = document.getElementById('clerk-auth-target');
+
+            if (!modal || !target) {{
+                console.error('Modal elements not found');
+                return;
+            }}
+
             modal.classList.add('active');
 
             // Mount Clerk component
-            if (mode === 'signIn') {{
-                clerk.mountSignIn(target, {{
-                    routing: 'virtual',
-                    redirectUrl: dashboardUrl,
-                    afterSignInUrl: dashboardUrl,
-                }});
-            }} else {{
-                clerk.mountSignUp(target, {{
-                    routing: 'virtual',
-                    redirectUrl: onboardingUrl,
-                    afterSignUpUrl: onboardingUrl,
-                }});
+            try {{
+                if (mode === 'signIn') {{
+                    clerk.mountSignIn(target, {{
+                        routing: 'virtual',
+                        redirectUrl: dashboardUrl,
+                        afterSignInUrl: dashboardUrl,
+                    }});
+                }} else {{
+                    clerk.mountSignUp(target, {{
+                        routing: 'virtual',
+                        redirectUrl: onboardingUrl,
+                        afterSignUpUrl: onboardingUrl,
+                    }});
+                }}
+                console.log('Clerk component mounted');
+            }} catch (err) {{
+                console.error('Failed to mount Clerk component:', err);
+                showError('Failed to open sign-in modal: ' + err.message);
             }}
 
             // Close modal on backdrop click
@@ -841,6 +954,8 @@ def clerk_login_page():
                     throw new Error('No token received from Clerk');
                 }}
 
+                console.log('Got token, verifying with backend...');
+
                 // Send token to Flask backend
                 const response = await fetch(apiUrl, {{
                     method: 'POST',
@@ -853,6 +968,7 @@ def clerk_login_page():
                 const data = await response.json();
 
                 if (response.ok && data.success) {{
+                    console.log('Auth successful, redirecting to dashboard');
                     // Redirect to dashboard
                     window.location.href = dashboardUrl;
                 }} else {{
@@ -867,6 +983,7 @@ def clerk_login_page():
         }}
 
         function showError(msg) {{
+            console.error('Auth error:', msg);
             const errorDiv = document.getElementById('error');
             errorDiv.textContent = msg;
             errorDiv.classList.remove('hidden');
@@ -883,14 +1000,14 @@ def clerk_login_page():
 </html>""")
 
 
-@app.route("/fieldpulse/clerk-signup")
+@app.route("/clerk-signup")
 def clerk_signup_page():
     """Clerk sign-up - redirects to login page with sign-up mode."""
     # Sign up uses the same page as login, just opens sign-up modal
     return redirect(url_for("clerk_login_page"))
 
 
-@app.route("/fieldpulse/api/clerk-verify", methods=["POST"])
+@app.route("/api/clerk-verify", methods=["POST"])
 def clerk_verify():
     """Verify Clerk JWT token and create Flask session."""
     import jwt
@@ -1047,7 +1164,7 @@ def clerk_verify():
             return jsonify({
                 "success": True,
                 "new_user": True,
-                "redirect": "/fieldpulse/clerk-onboarding"
+                "redirect": "/clerk-onboarding"
             })
 
     except jwt.ExpiredSignatureError:
@@ -1059,7 +1176,7 @@ def clerk_verify():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@app.route("/fieldpulse/clerk-callback")
+@app.route("/clerk-callback")
 def clerk_callback():
     """Handle callback from Clerk hosted auth - syncs user and creates session."""
     # Get the Clerk session token from cookie or query param
@@ -1096,16 +1213,16 @@ def clerk_callback():
         session['fp_user_name'] = user.get('name', email.split('@')[0])
 
         # Redirect to dashboard
-        return redirect('/fieldpulse/dashboard')
+        return redirect('/dashboard')
     else:
         # New user - need onboarding
         # Store temp session data
         session['clerk_user_id'] = clerk_user_id
         session['clerk_email'] = email
-        return redirect('/fieldpulse/clerk-onboarding')
+        return redirect('/clerk-onboarding')
 
 
-@app.route("/fieldpulse/clerk-onboarding")
+@app.route("/clerk-onboarding")
 def clerk_onboarding():
     """Onboarding page for new Clerk users - create business profile."""
     return render_template_string(f"""<!DOCTYPE html>
@@ -1130,7 +1247,7 @@ def clerk_onboarding():
                 <p class="text-slate-400 mt-2">Let's set up your business profile</p>
             </div>
 
-            <form method="POST" action="/fieldpulse/api/create-business" class="space-y-5">
+            <form method="POST" action="/api/create-business" class="space-y-5">
                 <div>
                     <label class="block text-sm font-medium text-slate-300 mb-2">Business Name</label>
                     <input type="text" name="business_name" required
@@ -1208,7 +1325,7 @@ def get_dashboard_data(business_id):
         release_db_connection(conn)
 
 
-@app.route("/fieldpulse/dashboard")
+@app.route("/dashboard")
 @fp_login_required
 def fieldpulse_dashboard():
     """Main FieldPulse dashboard with status filter tabs."""
@@ -1242,15 +1359,15 @@ def fieldpulse_dashboard():
         # Build quick action buttons based on status
         quick_actions = ""
         if job['status'] == 'scheduled':
-            quick_actions = f'''<form method="POST" action="/fieldpulse/jobs/{job['id']}" class="inline">
+            quick_actions = f'''<form method="POST" action="/jobs/{job['id']}" class="inline">
                 <input type="hidden" name="action" value="start">
-                <input type="hidden" name="redirect_to" value="/fieldpulse/dashboard">
+                <input type="hidden" name="redirect_to" value="/dashboard">
                 <button type="submit" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-1 rounded font-medium transition">▶ Start</button>
             </form>'''
         elif job['status'] == 'in_progress':
-            quick_actions = f'''<form method="POST" action="/fieldpulse/jobs/{job['id']}" class="inline">
+            quick_actions = f'''<form method="POST" action="/jobs/{job['id']}" class="inline">
                 <input type="hidden" name="action" value="complete">
-                <input type="hidden" name="redirect_to" value="/fieldpulse/dashboard">
+                <input type="hidden" name="redirect_to" value="/dashboard">
                 <button type="submit" class="text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded font-medium transition">✓ Complete</button>
             </form>'''
 
@@ -1284,7 +1401,7 @@ def fieldpulse_dashboard():
                 </div>
                 <div class="flex items-center gap-2">
                     {quick_actions}
-                    <a href="/fieldpulse/jobs/{job['id']}" class="text-xs text-slate-400 hover:text-white px-2 py-1">Edit →</a>
+                    <a href="/jobs/{job['id']}" class="text-xs text-slate-400 hover:text-white px-2 py-1">Edit →</a>
                 </div>
             </div>
         </div>
@@ -1332,13 +1449,13 @@ def fieldpulse_dashboard():
                 </div>
 
                 <nav class="space-y-1">
-                    <a href="/fieldpulse/dashboard" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
+                    <a href="/dashboard" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
                         </svg>
                         Dashboard
                     </a>
-                    <a href="/fieldpulse/jobs" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                    <a href="/jobs" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                         </svg>
@@ -1350,7 +1467,7 @@ def fieldpulse_dashboard():
                         </svg>
                         Schedule
                     </a>
-                    <a href="/fieldpulse/crews" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                    <a href="/crews" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
                         </svg>
@@ -1368,7 +1485,7 @@ def fieldpulse_dashboard():
                         <p class="text-sm font-medium text-white truncate">{user_name}</p>
                         <p class="text-xs text-slate-500 truncate">{business.get('subscription_tier', 'Starter').title()} Plan</p>
                     </div>
-                    <a href="/fieldpulse/logout" class="text-slate-400 hover:text-white">
+                    <a href="/logout" class="text-slate-400 hover:text-white">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
                         </svg>
@@ -1386,7 +1503,7 @@ def fieldpulse_dashboard():
                         <span class="px-3 py-1 bg-emerald-500/10 text-emerald-400 text-sm rounded-full border border-emerald-500/20">
                             Trial ends in 13 days
                         </span>
-                        <a href="/fieldpulse/jobs/new" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+                        <a href="/jobs/new" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
                             + New Job
                         </a>
                     </div>
@@ -1435,27 +1552,27 @@ def fieldpulse_dashboard():
                     <div class="lg:col-span-2">
                         <div class="flex items-center justify-between mb-6">
                             <h3 class="text-lg font-semibold">Recent Jobs</h3>
-                            <a href="/fieldpulse/jobs" class="text-emerald-400 hover:text-emerald-300 text-sm">View all →</a>
+                            <a href="/jobs" class="text-emerald-400 hover:text-emerald-300 text-sm">View all →</a>
                         </div>
 
                         <!-- Status Filter Tabs -->
                         <div class="flex gap-2 mb-6 overflow-x-auto pb-2">
-                            <a href="/fieldpulse/dashboard?status=all" class="px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap {'bg-slate-700 text-white border border-slate-600' if status_filter == 'all' else 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'}">
+                            <a href="/dashboard?status=all" class="px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap {'bg-slate-700 text-white border border-slate-600' if status_filter == 'all' else 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'}">
                                 All ({all_count})
                             </a>
-                            <a href="/fieldpulse/dashboard?status=scheduled" class="px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap {'bg-blue-500/20 text-blue-400 border border-blue-500/30' if status_filter == 'scheduled' else 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'}">
+                            <a href="/dashboard?status=scheduled" class="px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap {'bg-blue-500/20 text-blue-400 border border-blue-500/30' if status_filter == 'scheduled' else 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'}">
                                 Queue ({scheduled_count})
                             </a>
-                            <a href="/fieldpulse/dashboard?status=in_progress" class="px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap {'bg-amber-500/20 text-amber-400 border border-amber-500/30' if status_filter == 'in_progress' else 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'}">
+                            <a href="/dashboard?status=in_progress" class="px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap {'bg-amber-500/20 text-amber-400 border border-amber-500/30' if status_filter == 'in_progress' else 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'}">
                                 In Progress ({in_progress_count})
                             </a>
-                            <a href="/fieldpulse/dashboard?status=completed" class="px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap {'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' if status_filter == 'completed' else 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'}">
+                            <a href="/dashboard?status=completed" class="px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap {'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' if status_filter == 'completed' else 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'}">
                                 Done ({completed_count})
                             </a>
                         </div>
 
                         <div class="space-y-4">
-                            {job_cards if job_cards else '<p class="text-slate-500 text-center py-8">No jobs in this category. <a href="/fieldpulse/jobs/new" class="text-emerald-400 hover:text-emerald-300">Create a new job →</a></p>'}
+                            {job_cards if job_cards else '<p class="text-slate-500 text-center py-8">No jobs in this category. <a href="/jobs/new" class="text-emerald-400 hover:text-emerald-300">Create a new job →</a></p>'}
                         </div>
                     </div>
 
@@ -1484,7 +1601,7 @@ def fieldpulse_dashboard():
 </html>""")
 
 
-@app.route("/fieldpulse/logout")
+@app.route("/logout")
 def fieldpulse_logout():
     """Logout from FieldPulse - handles both Clerk and legacy session auth."""
     # Clear legacy session
@@ -1513,7 +1630,7 @@ def fieldpulse_logout():
                 const clerk = window.Clerk;
                 await clerk.load();
                 await clerk.signOut();
-                window.location.href = '/fieldpulse/clerk-login';
+                window.location.href = '/clerk-login';
             </script>
         </body>
         </html>""")
@@ -1525,7 +1642,7 @@ def fieldpulse_logout():
 # CLERK API ROUTES
 # ═════════════════════════════════════════════════════════════════
 
-@app.route("/fieldpulse/api/create-business", methods=["POST"])
+@app.route("/api/create-business", methods=["POST"])
 def api_create_business():
     """Create business profile for new Clerk user."""
     # This should be called after Clerk authentication
@@ -1560,14 +1677,14 @@ def api_create_business():
         session["fp_business_id"] = business_id
         session["fp_user_name"] = user_name
 
-        return redirect("/fieldpulse/dashboard")
+        return redirect("/dashboard")
 
     except Exception as e:
         logger.error(f"Failed to create business: {e}")
         return jsonify({"error": "Failed to create business"}), 500
 
 
-@app.route("/fieldpulse/api/clerk-webhook", methods=["POST"])
+@app.route("/api/clerk-webhook", methods=["POST"])
 def clerk_webhook():
     """Handle Clerk webhooks for user events (signup, update, delete)."""
     # Verify webhook signature
@@ -1678,7 +1795,7 @@ def clerk_webhook():
 # ADMIN AUTH ROUTES
 # ═════════════════════════════════════════════════════════════════
 
-@app.route("/login", methods=["GET","POST"])
+@app.route("/admin/login", methods=["GET","POST"])
 def login():
     """Admin login with email + password."""
     error = ""
@@ -1737,7 +1854,7 @@ button{{width:100%;padding:12px;background:#10b981;color:#fff;border:none;border
     return html_content
 
 
-@app.route("/logout")
+@app.route("/admin/logout")
 def logout():
     """Admin logout."""
     session.pop("logged_in", None)
@@ -1887,7 +2004,7 @@ def not_found(error):
     return """<!DOCTYPE html>
 <html><head><title>404 — Not Found</title>
 <style>body{font-family:sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center}</style>
-</head><body><div><h1>404</h1><p>Page not found</p><a href="/fieldpulse" style="color:#10b981">← Go to Dashboard</a></div></body></html>""", 404
+</head><body><div><h1>404</h1><p>Page not found</p><a href="/dashboard" style="color:#10b981">← Go to Dashboard</a></div></body></html>""", 404
 
 
 @app.errorhandler(500)
@@ -1897,7 +2014,7 @@ def server_error(error):
     return """<!DOCTYPE html>
 <html><head><title>500 — Server Error</title>
 <style>body{font-family:sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center}</style>
-</head><body><div><h1>500</h1><p>Server error</p><a href="/fieldpulse" style="color:#10b981">← Go to Dashboard</a></div></body></html>""", 500
+</head><body><div><h1>500</h1><p>Server error</p><a href="/dashboard" style="color:#10b981">← Go to Dashboard</a></div></body></html>""", 500
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -1908,14 +2025,14 @@ if __name__ == "__main__":
     port = int(os.environ.get("DASHBOARD_PORT", 5000))
     print(f"\n  FieldPulse Dashboard")
     print(f"  Running at: http://localhost:{port}")
-    print(f"  Login:      http://localhost:{port}/fieldpulse/login\n")
+    print(f"  Login:      http://localhost:{port}/login\n")
     app.run(host="0.0.0.0", port=port, debug=False)
 
 # ═════════════════════════════════════════════════════════════════
 # FIELD PULSE JOB ROUTES
 # ═════════════════════════════════════════════════════════════════
 
-@app.route("/fieldpulse/jobs")
+@app.route("/jobs")
 @fp_login_required
 def fieldpulse_jobs():
     """Job list page."""
@@ -1963,16 +2080,16 @@ def fieldpulse_jobs():
         quick_actions = ""
         if job['status'] == 'scheduled':
             quick_actions = f'''
-                <form method="POST" action="/fieldpulse/jobs/{job['id']}" class="inline">
+                <form method="POST" action="/jobs/{job['id']}" class="inline">
                     <input type="hidden" name="action" value="start">
-                    <input type="hidden" name="redirect_to" value="/fieldpulse/jobs">
+                    <input type="hidden" name="redirect_to" value="/jobs">
                     <button type="submit" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-1 rounded font-medium transition mr-2">▶ Start</button>
                 </form>'''
         elif job['status'] == 'in_progress':
             quick_actions = f'''
-                <form method="POST" action="/fieldpulse/jobs/{job['id']}" class="inline">
+                <form method="POST" action="/jobs/{job['id']}" class="inline">
                     <input type="hidden" name="action" value="complete">
-                    <input type="hidden" name="redirect_to" value="/fieldpulse/jobs">
+                    <input type="hidden" name="redirect_to" value="/jobs">
                     <button type="submit" class="text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded font-medium transition mr-2">✓ Complete</button>
                 </form>'''
 
@@ -1988,7 +2105,7 @@ def fieldpulse_jobs():
             <td class="py-4 px-4 text-slate-300">{escape(crew)}</td>
             <td class="py-4 px-4">
                 {quick_actions}
-                <a href="/fieldpulse/jobs/{job['id']}" class="text-emerald-400 hover:text-emerald-300 font-medium text-xs">Edit →</a>
+                <a href="/jobs/{job['id']}" class="text-emerald-400 hover:text-emerald-300 font-medium text-xs">Edit →</a>
             </td>
         </tr>'''
 
@@ -2020,13 +2137,13 @@ def fieldpulse_jobs():
                     </div>
                 </div>
                 <nav class="space-y-1">
-                    <a href="/fieldpulse/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                    <a href="/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6z"/>
                         </svg>
                         Dashboard
                     </a>
-                    <a href="/fieldpulse/jobs" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
+                    <a href="/jobs" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                         </svg>
@@ -2041,17 +2158,17 @@ def fieldpulse_jobs():
             <header class="bg-slate-900 border-b border-slate-800 px-8 py-4 sticky top-0 z-10">
                 <div class="flex items-center justify-between">
                     <h2 class="text-xl font-semibold">Jobs</h2>
-                    <a href="/fieldpulse/jobs/new" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium transition">+ New Job</a>
+                    <a href="/jobs/new" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium transition">+ New Job</a>
                 </div>
             </header>
 
             <div class="p-8">
                 <!-- Filters -->
                 <div class="mb-6 flex gap-2">
-                    <a href="/fieldpulse/jobs" class="px-4 py-2 rounded-lg text-sm font-medium {'bg-emerald-500 text-white' if not status_filter else 'bg-slate-800 text-slate-300 hover:text-white'}">All</a>
-                    <a href="/fieldpulse/jobs?status=scheduled" class="px-4 py-2 rounded-lg text-sm font-medium {'bg-emerald-500 text-white' if status_filter == 'scheduled' else 'bg-slate-800 text-slate-300 hover:text-white'}">Scheduled</a>
-                    <a href="/fieldpulse/jobs?status=in_progress" class="px-4 py-2 rounded-lg text-sm font-medium {'bg-emerald-500 text-white' if status_filter == 'in_progress' else 'bg-slate-800 text-slate-300 hover:text-white'}">In Progress</a>
-                    <a href="/fieldpulse/jobs?status=completed" class="px-4 py-2 rounded-lg text-sm font-medium {'bg-emerald-500 text-white' if status_filter == 'completed' else 'bg-slate-800 text-slate-300 hover:text-white'}">Completed</a>
+                    <a href="/jobs" class="px-4 py-2 rounded-lg text-sm font-medium {'bg-emerald-500 text-white' if not status_filter else 'bg-slate-800 text-slate-300 hover:text-white'}">All</a>
+                    <a href="/jobs?status=scheduled" class="px-4 py-2 rounded-lg text-sm font-medium {'bg-emerald-500 text-white' if status_filter == 'scheduled' else 'bg-slate-800 text-slate-300 hover:text-white'}">Scheduled</a>
+                    <a href="/jobs?status=in_progress" class="px-4 py-2 rounded-lg text-sm font-medium {'bg-emerald-500 text-white' if status_filter == 'in_progress' else 'bg-slate-800 text-slate-300 hover:text-white'}">In Progress</a>
+                    <a href="/jobs?status=completed" class="px-4 py-2 rounded-lg text-sm font-medium {'bg-emerald-500 text-white' if status_filter == 'completed' else 'bg-slate-800 text-slate-300 hover:text-white'}">Completed</a>
                 </div>
 
                 <!-- Jobs Table -->
@@ -2078,7 +2195,7 @@ def fieldpulse_jobs():
 </html>''')
 
 
-@app.route("/fieldpulse/jobs/new", methods=["GET", "POST"])
+@app.route("/jobs/new", methods=["GET", "POST"])
 @fp_login_required
 def fieldpulse_new_job():
     """Create new job page."""
@@ -2173,13 +2290,13 @@ def fieldpulse_new_job():
                     </div>
                 </div>
                 <nav class="space-y-1">
-                    <a href="/fieldpulse/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                    <a href="/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6z"/>
                         </svg>
                         Dashboard
                     </a>
-                    <a href="/fieldpulse/jobs" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
+                    <a href="/jobs" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                         </svg>
@@ -2193,7 +2310,7 @@ def fieldpulse_new_job():
         <main class="flex-1 ml-64">
             <header class="bg-slate-900 border-b border-slate-800 px-8 py-4 sticky top-0 z-10">
                 <div class="flex items-center gap-4">
-                    <a href="/fieldpulse/jobs" class="text-slate-400 hover:text-white">← Back to Jobs</a>
+                    <a href="/jobs" class="text-slate-400 hover:text-white">← Back to Jobs</a>
                     <h2 class="text-xl font-semibold">New Job</h2>
                 </div>
             </header>
@@ -2577,7 +2694,7 @@ def fieldpulse_new_job():
 
 # Job Detail Route
 
-@app.route("/fieldpulse/jobs/<job_id>", methods=["GET", "POST"])
+@app.route("/jobs/<job_id>", methods=["GET", "POST"])
 @fp_login_required
 def fieldpulse_job_detail(job_id):
     """View and edit job details with status actions."""
@@ -2612,11 +2729,11 @@ def fieldpulse_job_detail(job_id):
         action = request.form.get("action", "")
 
         # Get redirect destination (from hidden field or referrer) - validate for open redirect
-        redirect_to = request.form.get("redirect_to") or request.headers.get("Referer", "/fieldpulse/jobs")
+        redirect_to = request.form.get("redirect_to") or request.headers.get("Referer", "/jobs")
         # Security: Only allow relative redirects to our own domain
-        ALLOWED_REDIRECTS = ['/fieldpulse/dashboard', '/fieldpulse/jobs', '/fieldpulse/schedule', '/fieldpulse/crew']
+        ALLOWED_REDIRECTS = ['/dashboard', '/jobs', '/schedule', '/crew']
         if redirect_to not in ALLOWED_REDIRECTS:
-            redirect_to = "/fieldpulse/jobs"
+            redirect_to = "/jobs"
 
         if action == "start":
             query_db("UPDATE jobs SET status = 'in_progress', started_at = NOW() WHERE id = %s", (job_id,))
@@ -2905,13 +3022,13 @@ def fieldpulse_job_detail(job_id):
                     </div>
                 </div>
                 <nav class="space-y-1">
-                    <a href="/fieldpulse/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                    <a href="/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6z"/>
                         </svg>
                         Dashboard
                     </a>
-                    <a href="/fieldpulse/jobs" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
+                    <a href="/jobs" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                         </svg>
@@ -2926,7 +3043,7 @@ def fieldpulse_job_detail(job_id):
             <header class="bg-slate-900 border-b border-slate-800 px-8 py-4 sticky top-0 z-10">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-4">
-                        <a href="/fieldpulse/jobs" class="text-slate-400 hover:text-white">← Back to Jobs</a>
+                        <a href="/jobs" class="text-slate-400 hover:text-white">← Back to Jobs</a>
                         <h2 class="text-xl font-semibold">Job Details</h2>
                     </div>
                     <div class="flex items-center gap-3">
@@ -3070,7 +3187,7 @@ def fieldpulse_job_detail(job_id):
                     <!-- Actions (end of main form) -->
                     <div class="flex gap-4">
                         <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition">Save Changes</button>
-                        <a href="/fieldpulse/jobs" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition">Cancel</a>
+                        <a href="/jobs" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition">Cancel</a>
                     </div>
                 </form>
 
@@ -3137,7 +3254,7 @@ def fieldpulse_job_detail(job_id):
 """)
 
 
-@app.route("/fieldpulse/crews")
+@app.route("/crews")
 @fp_login_required
 def fieldpulse_crews():
     """Crew management - list all crews."""
@@ -3188,7 +3305,7 @@ def fieldpulse_crews():
                         </div>
                     </div>
                     <div class="flex gap-2">
-                        <a href="/fieldpulse/crews/{crew["id"]}/edit"
+                        <a href="/crews/{crew["id"]}/edit"
                            class="p-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
@@ -3203,7 +3320,7 @@ def fieldpulse_crews():
             </div>
             <div class="px-6 py-3 bg-slate-900/50 border-t border-slate-700 flex items-center justify-between">
                 <span class="text-sm text-slate-400">{active_jobs} active job{"s" if active_jobs != 1 else ""}</span>
-                <a href="/fieldpulse/jobs?crew={crew["id"]}" class="text-sm text-{color}-400 hover:text-{color}-300 transition">View jobs →</a>
+                <a href="/jobs?crew={crew["id"]}" class="text-sm text-{color}-400 hover:text-{color}-300 transition">View jobs →</a>
             </div>
         </div>
         '''
@@ -3235,13 +3352,13 @@ def fieldpulse_crews():
                 </div>
 
                 <nav class="space-y-1">
-                    <a href="/fieldpulse/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                    <a href="/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
                         </svg>
                         Dashboard
                     </a>
-                    <a href="/fieldpulse/jobs" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                    <a href="/jobs" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                         </svg>
@@ -3253,7 +3370,7 @@ def fieldpulse_crews():
                         </svg>
                         Schedule
                     </a>
-                    <a href="/fieldpulse/crews" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
+                    <a href="/crews" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
                         </svg>
@@ -3269,7 +3386,7 @@ def fieldpulse_crews():
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-white truncate">{user_name}</p>
-                        <a href="/fieldpulse/logout" class="text-xs text-slate-500 hover:text-slate-400">Sign out</a>
+                        <a href="/logout" class="text-xs text-slate-500 hover:text-slate-400">Sign out</a>
                     </div>
                 </div>
             </div>
@@ -3284,7 +3401,7 @@ def fieldpulse_crews():
                         <h2 class="text-2xl font-bold text-white">Crew Management</h2>
                         <p class="text-slate-400">Manage your team members and assignments</p>
                     </div>
-                    <a href="/fieldpulse/crews/new" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium transition flex items-center gap-2">
+                    <a href="/crews/new" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium transition flex items-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                         </svg>
@@ -3303,7 +3420,7 @@ def fieldpulse_crews():
                     </div>
                     <h3 class="text-xl font-semibold text-white mb-2">No crews yet</h3>
                     <p class="text-slate-400 mb-6">Add your first crew member to start assigning jobs</p>
-                    <a href="/fieldpulse/crews/new" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition inline-flex items-center gap-2">
+                    <a href="/crews/new" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition inline-flex items-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                         </svg>
@@ -3318,7 +3435,7 @@ def fieldpulse_crews():
 </html>""")
 
 
-@app.route("/fieldpulse/crews/new", methods=["GET", "POST"])
+@app.route("/crews/new", methods=["GET", "POST"])
 @fp_login_required
 def fieldpulse_crew_new():
     """Create a new crew member."""
@@ -3358,7 +3475,7 @@ def fieldpulse_crew_new():
             """, (crew_id, business_id, name, role or None, email or None, phone or None, color))
 
             invalidate_cache(f"crews:{business_id}")
-            return redirect("/fieldpulse/crews")
+            return redirect("/crews")
 
     color_options_html = ""
     for val, label in color_options:
@@ -3392,13 +3509,13 @@ def fieldpulse_crew_new():
                 </div>
 
                 <nav class="space-y-1">
-                    <a href="/fieldpulse/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                    <a href="/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
                         </svg>
                         Dashboard
                     </a>
-                    <a href="/fieldpulse/jobs" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                    <a href="/jobs" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                         </svg>
@@ -3410,7 +3527,7 @@ def fieldpulse_crew_new():
                         </svg>
                         Schedule
                     </a>
-                    <a href="/fieldpulse/crews" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
+                    <a href="/crews" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
                         </svg>
@@ -3426,7 +3543,7 @@ def fieldpulse_crew_new():
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-white truncate">{user_name}</p>
-                        <a href="/fieldpulse/logout" class="text-xs text-slate-500 hover:text-slate-400">Sign out</a>
+                        <a href="/logout" class="text-xs text-slate-500 hover:text-slate-400">Sign out</a>
                     </div>
                 </div>
             </div>
@@ -3438,7 +3555,7 @@ def fieldpulse_crew_new():
             <div class="bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
                 <div class="px-8 py-4 flex items-center justify-between">
                     <div class="flex items-center gap-4">
-                        <a href="/fieldpulse/crews" class="text-slate-400 hover:text-white transition">
+                        <a href="/crews" class="text-slate-400 hover:text-white transition">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                             </svg>
@@ -3494,7 +3611,7 @@ def fieldpulse_crew_new():
                     </div>
 
                     <div class="flex justify-end gap-3 pt-4 border-t border-slate-700">
-                        <a href="/fieldpulse/crews" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition">Cancel</a>
+                        <a href="/crews" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition">Cancel</a>
                         <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition">Create Crew</button>
                     </div>
                 </form>
@@ -3505,7 +3622,7 @@ def fieldpulse_crew_new():
 </html>""")
 
 
-@app.route("/fieldpulse/crews/<crew_id>/edit", methods=["GET", "POST"])
+@app.route("/crews/<crew_id>/edit", methods=["GET", "POST"])
 @fp_login_required
 def fieldpulse_crew_edit(crew_id):
     """Edit a crew member."""
@@ -3525,7 +3642,7 @@ def fieldpulse_crew_edit(crew_id):
     )
 
     if not crew:
-        return redirect("/fieldpulse/crews")
+        return redirect("/crews")
 
     color_options = [
         ("emerald", "Emerald"),
@@ -3547,7 +3664,7 @@ def fieldpulse_crew_edit(crew_id):
                 (crew_id, business_id)
             )
             invalidate_cache(f"crews:{business_id}")
-            return redirect("/fieldpulse/crews")
+            return redirect("/crews")
 
         name = request.form.get("name", "").strip()
         role = request.form.get("role", "").strip()
@@ -3564,7 +3681,7 @@ def fieldpulse_crew_edit(crew_id):
             """, (name, role or None, email or None, phone or None, color, crew_id, business_id))
 
             invalidate_cache(f"crews:{business_id}")
-            return redirect("/fieldpulse/crews")
+            return redirect("/crews")
 
     color_options_html = ""
     current_color = crew.get("color", "emerald")
@@ -3599,13 +3716,13 @@ def fieldpulse_crew_edit(crew_id):
                 </div>
 
                 <nav class="space-y-1">
-                    <a href="/fieldpulse/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                    <a href="/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
                         </svg>
                         Dashboard
                     </a>
-                    <a href="/fieldpulse/jobs" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                    <a href="/jobs" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                         </svg>
@@ -3617,7 +3734,7 @@ def fieldpulse_crew_edit(crew_id):
                         </svg>
                         Schedule
                     </a>
-                    <a href="/fieldpulse/crews" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
+                    <a href="/crews" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
                         </svg>
@@ -3633,7 +3750,7 @@ def fieldpulse_crew_edit(crew_id):
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-white truncate">{user_name}</p>
-                        <a href="/fieldpulse/logout" class="text-xs text-slate-500 hover:text-slate-400">Sign out</a>
+                        <a href="/logout" class="text-xs text-slate-500 hover:text-slate-400">Sign out</a>
                     </div>
                 </div>
             </div>
@@ -3645,7 +3762,7 @@ def fieldpulse_crew_edit(crew_id):
             <div class="bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
                 <div class="px-8 py-4 flex items-center justify-between">
                     <div class="flex items-center gap-4">
-                        <a href="/fieldpulse/crews" class="text-slate-400 hover:text-white transition">
+                        <a href="/crews" class="text-slate-400 hover:text-white transition">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                             </svg>
@@ -3712,7 +3829,7 @@ def fieldpulse_crew_edit(crew_id):
                             Remove Crew
                         </button>
                         <div class="flex gap-3">
-                            <a href="/fieldpulse/crews" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition">Cancel</a>
+                            <a href="/crews" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition">Cancel</a>
                             <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition">Save Changes</button>
                         </div>
                     </div>
