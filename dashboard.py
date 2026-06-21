@@ -605,7 +605,7 @@ def get_dashboard_data(business_id):
 @app.route("/fieldpulse/dashboard")
 @fp_login_required
 def fieldpulse_dashboard():
-    """Main FieldPulse dashboard."""
+    """Main FieldPulse dashboard with status filter tabs."""
     business = get_business_from_session()
     if not business:
         return redirect(url_for("fieldpulse_logout"))
@@ -614,9 +614,22 @@ def fieldpulse_dashboard():
     stats, recent_jobs, crews = get_dashboard_data(business_id)
     user_name = session.get("fp_user_name", "User")
 
-    # Build job cards HTML
+    # Get status filter from query params
+    status_filter = request.args.get('status', 'all')
+
+    # Calculate counts for each status
+    all_count = len(recent_jobs) if recent_jobs else 0
+    scheduled_count = sum(1 for j in recent_jobs if j['status'] == 'scheduled') if recent_jobs else 0
+    in_progress_count = sum(1 for j in recent_jobs if j['status'] == 'in_progress') if recent_jobs else 0
+    completed_count = sum(1 for j in recent_jobs if j['status'] == 'completed') if recent_jobs else 0
+
+    # Build job cards HTML with optional filtering
     job_cards = ""
-    for job in (recent_jobs or []):
+    filtered_jobs = recent_jobs
+    if status_filter != 'all' and recent_jobs:
+        filtered_jobs = [j for j in recent_jobs if j['status'] == status_filter]
+
+    for job in (filtered_jobs or []):
         status_class = f"status-{job['status']}"
         date_str = job['scheduled_date'].strftime('%b %d') if hasattr(job['scheduled_date'], 'strftime') else str(job['scheduled_date'])[:10]
 
@@ -818,8 +831,25 @@ def fieldpulse_dashboard():
                             <h3 class="text-lg font-semibold">Recent Jobs</h3>
                             <a href="/fieldpulse/jobs" class="text-emerald-400 hover:text-emerald-300 text-sm">View all →</a>
                         </div>
+
+                        <!-- Status Filter Tabs -->
+                        <div class="flex gap-2 mb-6 overflow-x-auto pb-2">
+                            <a href="/fieldpulse/dashboard?status=all" class="px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap {'bg-slate-700 text-white border border-slate-600' if status_filter == 'all' else 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'}">
+                                All ({all_count})
+                            </a>
+                            <a href="/fieldpulse/dashboard?status=scheduled" class="px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap {'bg-blue-500/20 text-blue-400 border border-blue-500/30' if status_filter == 'scheduled' else 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'}">
+                                Queue ({scheduled_count})
+                            </a>
+                            <a href="/fieldpulse/dashboard?status=in_progress" class="px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap {'bg-amber-500/20 text-amber-400 border border-amber-500/30' if status_filter == 'in_progress' else 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'}">
+                                In Progress ({in_progress_count})
+                            </a>
+                            <a href="/fieldpulse/dashboard?status=completed" class="px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap {'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' if status_filter == 'completed' else 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'}">
+                                Done ({completed_count})
+                            </a>
+                        </div>
+
                         <div class="space-y-4">
-                            {job_cards if job_cards else '<p class="text-slate-500 text-center py-8">No jobs yet. Create your first job!</p>'}
+                            {job_cards if job_cards else '<p class="text-slate-500 text-center py-8">No jobs in this category. <a href="/fieldpulse/jobs/new" class="text-emerald-400 hover:text-emerald-300">Create a new job →</a></p>'}
                         </div>
                     </div>
 
