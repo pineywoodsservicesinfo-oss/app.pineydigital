@@ -545,8 +545,9 @@ def fieldpulse_redirect():
 
 @app.route("/fieldpulse/login")
 def fieldpulse_login():
-    """FieldPulse login - always redirects to Clerk."""
-    return redirect(url_for("clerk_login_page"))
+    """FieldPulse login - shows Clerk login page directly."""
+    # Just call the clerk login page function directly
+    return clerk_login_page()
 
 
 @app.route("/fieldpulse/legacy-login", methods=["GET", "POST"])
