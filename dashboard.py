@@ -887,9 +887,9 @@ def clerk_login_page():
                 console.log('Event listeners attached to buttons');
 
                 // Listen for auth state changes
-                clerk.addListener(async ({{ user, session }}) => {{
-                    console.log('Auth state changed:', {{ user, session }});
-                    if (user && session) {{
+                clerk.addListener(async (ev) => {{
+                    console.log('Auth state changed:', ev);
+                    if (ev.user && ev.session) {{
                         await handleAuthenticatedUser(clerk);
                     }}
                 }});
@@ -957,20 +957,22 @@ def clerk_login_page():
                 console.log('Got token, verifying with backend...');
 
                 // Send token to Flask backend
+                const payload = { token: token };
                 const response = await fetch(apiUrl, {{
                     method: 'POST',
                     headers: {{
                         'Content-Type': 'application/json',
                     }},
-                    body: JSON.stringify({{ token: token }})
+                    body: JSON.stringify(payload)
                 }});
 
                 const data = await response.json();
 
                 if (response.ok && data.success) {{
-                    console.log('Auth successful, redirecting to dashboard');
-                    // Redirect to dashboard
-                    window.location.href = dashboardUrl;
+                    console.log('Auth successful:', data);
+                    // Redirect to dashboard or onboarding for new users
+                    const redirectTo = data.redirect || dashboardUrl;
+                    window.location.href = redirectTo;
                 }} else {{
                     throw new Error(data.error || 'Authentication failed');
                 }}
