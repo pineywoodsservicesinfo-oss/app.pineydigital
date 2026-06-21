@@ -639,249 +639,43 @@ def fieldpulse_legacy_login():
 
 @app.route("/fieldpulse/clerk-login")
 def clerk_login_page():
-    """Clerk authentication page with SignIn component."""
+    """Clerk authentication - redirects to Clerk hosted sign-in page."""
     clerk_pub_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
 
     if not clerk_pub_key:
-        # Clerk not configured - show error
-        return render_template_string("""
-        <!DOCTYPE html>
-        <html class="dark"><body class="bg-slate-900 text-white text-center p-10">
-            <h1 class="text-2xl mb-4">Authentication Error</h1>
-            <p>Clerk is not configured. Please set CLERK_PUBLISHABLE_KEY.</p>
-            <a href="/fieldpulse/legacy-login" class="text-emerald-400">Use legacy login</a>
-        </body></html>
-        """), 500
+        # Clerk not configured - redirect to legacy login
+        return redirect(url_for("fieldpulse_legacy_login"))
 
-    # Extract domain from publishable key to get the correct frontend API
+    # Extract the instance domain from publishable key
     # pk_test_xxx -> https://xxx.clerk.accounts.dev
-    # pk_live_xxx -> https://xxx.clerk.accounts.dev
-    if clerk_pub_key.startswith("pk_test_"):
-        env = "development"
-    elif clerk_pub_key.startswith("pk_live_"):
-        env = "production"
-    else:
-        env = "development"
+    key_part = clerk_pub_key.replace("pk_test_", "").replace("pk_live_", "")
+    # Remove any trailing characters after the base64 part (if any)
+    key_base = key_part.split('.')[0] if '.' in key_part else key_part
 
-    return render_template_string(f"""<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FieldPulse — Sign In</title>
-    {TAILWIND_CDN}
-    {FIELD_PULSE_CSS}
-    <!-- Clerk JavaScript SDK -->
-    <script
-        async
-        crossorigin="anonymous"
-        data-clerk-publishable-key="{clerk_pub_key}"
-        src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
-        type="module"
-    ></script>
-</head>
-<body class="bg-slate-900 min-h-screen flex items-center justify-center">
-    <div class="w-full max-w-md px-6">
-        <div class="bg-slate-800 rounded-2xl shadow-2xl p-8 fade-in">
-            <div class="text-center mb-8">
-                <div class="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl mx-auto mb-4 flex items-center justify-center">
-                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                    </svg>
-                </div>
-                <h1 class="text-2xl font-bold text-white">FieldPulse</h1>
-                <p class="text-slate-400 mt-1">Field Service Management</p>
-            </div>
+    # Build the Clerk hosted sign-in URL
+    clerk_domain = f"https://{key_base}.clerk.accounts.dev"
+    sign_in_url = f"{clerk_domain}/sign-in?redirect_url=/fieldpulse/dashboard"
 
-            <!-- Clerk SignIn Component Container -->
-            <div id="clerk-signin" class="min-h-[400px]"></div>
-
-            <p class="text-center text-slate-500 text-sm mt-6">
-                Protected by Clerk authentication
-            </p>
-            <p class="text-center text-slate-600 text-xs mt-2">
-                <a href="/fieldpulse/legacy-login" class="hover:text-slate-500">Admin: Use legacy login</a>
-            </p>
-        </div>
-    </div>
-
-    <script type="module">
-        // Wait for Clerk to load
-        async function initClerk() {{
-            // Wait for window.Clerk to be available
-            let attempts = 0;
-            while (!window.Clerk && attempts < 50) {{
-                await new Promise(r => setTimeout(r, 100));
-                attempts++;
-            }}
-
-            if (!window.Clerk) {{
-                console.error('Clerk failed to load');
-                document.getElementById('clerk-signin').innerHTML =
-                    '<div class="text-red-400 text-center p-4">Failed to load authentication. Please refresh.</div>';
-                return;
-            }}
-
-            const clerk = window.Clerk;
-
-            try {{
-                await clerk.load({{
-                    appearance: {{
-                        variables: {{
-                            colorPrimary: '#10b981',
-                            colorBackground: '#1e293b',
-                            colorText: '#ffffff',
-                            colorTextSecondary: '#94a3b8',
-                            colorInputBackground: '#0f172a',
-                            colorInputBorder: '#334155',
-                            borderRadius: '0.75rem',
-                        }}
-                    }},
-                    signInUrl: '/fieldpulse/clerk-login',
-                    afterSignInUrl: '/fieldpulse/dashboard',
-                    afterSignUpUrl: '/fieldpulse/clerk-onboarding',
-                }});
-
-                // Mount the SignIn component
-                const signInDiv = document.getElementById('clerk-signin');
-                if (signInDiv) {{
-                    clerk.mountSignIn(signInDiv, {{
-                        routing: 'path',
-                        path: '/fieldpulse/clerk-login',
-                        signUpUrl: '/fieldpulse/clerk-signup',
-                    }});
-                }}
-
-                // Handle auth state changes
-                clerk.addListener(({{ user, session }}) => {{
-                    if (user && session) {{
-                        session.getToken().then(token => {{
-                            if (token) {{
-                                localStorage.setItem('__clerk_token', token);
-                                window.location.href = '/fieldpulse/dashboard';
-                            }}
-                        }});
-                    }}
-                }});
-            }} catch (err) {{
-                console.error('Clerk init error:', err);
-                document.getElementById('clerk-signin').innerHTML =
-                    '<div class="text-red-400 text-center p-4">Authentication error: ' + err.message + '</div>';
-            }}
-        }}
-
-        // Start initialization
-        if (document.readyState === 'complete') {{
-            initClerk();
-        }} else {{
-            window.addEventListener('load', initClerk);
-        }}
-    </script>
-</body>
-</html>""")
+    return redirect(sign_in_url)
 
 
 @app.route("/fieldpulse/clerk-signup")
 def clerk_signup_page():
-    """Clerk sign-up page."""
+    """Clerk sign-up page - redirects to Clerk hosted sign-up page."""
     clerk_pub_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
 
     if not clerk_pub_key:
-        return redirect(url_for("fieldpulse_login"))
+        return redirect(url_for("fieldpulse_legacy_login"))
 
-    return render_template_string(f"""<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FieldPulse — Sign Up</title>
-    {TAILWIND_CDN}
-    {FIELD_PULSE_CSS}
-    <script
-        async
-        crossorigin="anonymous"
-        data-clerk-publishable-key="{clerk_pub_key}"
-        src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
-        type="module"
-    ></script>
-</head>
-<body class="bg-slate-900 min-h-screen flex items-center justify-center">
-    <div class="w-full max-w-md px-6">
-        <div class="bg-slate-800 rounded-2xl shadow-2xl p-8 fade-in">
-            <div class="text-center mb-8">
-                <div class="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl mx-auto mb-4 flex items-center justify-center">
-                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                    </svg>
-                </div>
-                <h1 class="text-2xl font-bold text-white">Create Account</h1>
-                <p class="text-slate-400 mt-1">Start your free trial</p>
-            </div>
+    # Extract the instance domain from publishable key
+    key_part = clerk_pub_key.replace("pk_test_", "").replace("pk_live_", "")
+    key_base = key_part.split('.')[0] if '.' in key_part else key_part
 
-            <div id="clerk-signup" class="min-h-[500px]"></div>
+    # Build the Clerk hosted sign-up URL
+    clerk_domain = f"https://{key_base}.clerk.accounts.dev"
+    sign_up_url = f"{clerk_domain}/sign-up?redirect_url=/fieldpulse/clerk-onboarding"
 
-            <p class="text-center text-slate-500 text-sm mt-6">
-                Already have an account? <a href="/fieldpulse/clerk-login" class="text-emerald-400 hover:text-emerald-300">Sign in</a>
-            </p>
-        </div>
-    </div>
-
-    <script type="module">
-        async function initClerk() {{
-            let attempts = 0;
-            while (!window.Clerk && attempts < 50) {{
-                await new Promise(r => setTimeout(r, 100));
-                attempts++;
-            }}
-
-            if (!window.Clerk) {{
-                console.error('Clerk failed to load');
-                document.getElementById('clerk-signup').innerHTML =
-                    '<div class="text-red-400 text-center p-4">Failed to load. Please refresh.</div>';
-                return;
-            }}
-
-            const clerk = window.Clerk;
-
-            try {{
-                await clerk.load({{
-                    appearance: {{
-                        variables: {{
-                            colorPrimary: '#10b981',
-                            colorBackground: '#1e293b',
-                            colorText: '#ffffff',
-                            colorTextSecondary: '#94a3b8',
-                            colorInputBackground: '#0f172a',
-                            colorInputBorder: '#334155',
-                            borderRadius: '0.75rem',
-                        }}
-                    }},
-                    afterSignUpUrl: '/fieldpulse/clerk-onboarding',
-                }});
-
-                const signUpDiv = document.getElementById('clerk-signup');
-                if (signUpDiv) {{
-                    clerk.mountSignUp(signUpDiv, {{
-                        routing: 'path',
-                        path: '/fieldpulse/clerk-signup',
-                        signInUrl: '/fieldpulse/clerk-login',
-                    }});
-                }}
-            }} catch (err) {{
-                console.error('Clerk init error:', err);
-                document.getElementById('clerk-signup').innerHTML =
-                    '<div class="text-red-400 text-center p-4">Error: ' + err.message + '</div>';
-            }}
-        }}
-
-        if (document.readyState === 'complete') {{
-            initClerk();
-        }} else {{
-            window.addEventListener('load', initClerk);
-        }}
-    </script>
-</body>
-</html>""")
+    return redirect(sign_up_url)
 
 
 @app.route("/fieldpulse/clerk-onboarding")
