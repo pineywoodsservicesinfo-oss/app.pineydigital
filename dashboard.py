@@ -782,15 +782,9 @@ def clerk_login_page():
     </div>
 
     <!-- Load Clerk JS SDK -->
-    <script
-        async
-        crossorigin="anonymous"
-        data-clerk-publishable-key="{clerk_pub_key}"
-        src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
-        type="module"
-    ></script>
-
     <script type="module">
+        import {{ Clerk }} from 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
+
         const clerkPubKey = "{clerk_pub_key}";
         const apiUrl = "{app_domain}/api/clerk-verify";
         const dashboardUrl = "{app_domain}/dashboard";
@@ -799,23 +793,8 @@ def clerk_login_page():
         async function initAuth() {{
             console.log('Initializing Clerk auth...');
 
-            // Wait for Clerk to be available on window
-            let attempts = 0;
-            while (!window.Clerk && attempts < 50) {{
-                await new Promise(r => setTimeout(r, 100));
-                attempts++;
-            }}
-
-            if (!window.Clerk) {{
-                showError('Clerk SDK failed to load. Please refresh the page.');
-                console.error('Clerk not found on window after waiting');
-                return;
-            }}
-
-            console.log('Clerk found, initializing...');
-
             try {{
-                const clerk = window.Clerk;
+                const clerk = new Clerk(clerkPubKey);
 
                 await clerk.load({{
                     routing: 'virtual',
@@ -1621,17 +1600,11 @@ def fieldpulse_logout():
         <!DOCTYPE html>
         <html>
         <head>
-            <script
-                async
-                crossorigin="anonymous"
-                data-clerk-publishable-key="{clerk_pub_key}"
-                src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
-                type="module"
-            ></script>
         </head>
         <body>
             <script type="module">
-                const clerk = window.Clerk;
+                import {{ Clerk }} from 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
+                const clerk = new Clerk("{clerk_pub_key}");
                 await clerk.load();
                 await clerk.signOut();
                 window.location.href = '/clerk-login';
