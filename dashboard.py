@@ -995,12 +995,22 @@ def admin_migrate():
             except Exception:
                 pass  # Column may already be TEXT or table doesn't exist yet
 
-            # Migration: Extend crews table with additional fields
+            # Migration: Create crews table if it doesn't exist, then add columns
             try:
-                query_db("ALTER TABLE crews ADD COLUMN IF NOT EXISTS color VARCHAR(50) DEFAULT 'emerald'")
-                query_db("ALTER TABLE crews ADD COLUMN IF NOT EXISTS role VARCHAR(255)")
-                query_db("ALTER TABLE crews ADD COLUMN IF NOT EXISTS email VARCHAR(255)")
-                query_db("ALTER TABLE crews ADD COLUMN IF NOT EXISTS phone VARCHAR(50)")
+                query_db("""
+                    CREATE TABLE IF NOT EXISTS crews (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        business_id UUID REFERENCES businesses(id) ON DELETE CASCADE,
+                        name VARCHAR(255) NOT NULL,
+                        role VARCHAR(255),
+                        email VARCHAR(255),
+                        phone VARCHAR(50),
+                        color VARCHAR(50) DEFAULT 'emerald',
+                        active BOOLEAN DEFAULT TRUE,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                    )
+                """)
+                query_db("CREATE INDEX IF NOT EXISTS idx_crews_business ON crews(business_id)")
                 query_db("CREATE INDEX IF NOT EXISTS idx_crews_active ON crews(active)")
             except Exception as e:
                 return jsonify({"status": "error", "message": f"Crews migration failed: {str(e)}"}), 500
