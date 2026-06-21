@@ -704,13 +704,15 @@ CREATE TABLE IF NOT EXISTS job_notes (
 
 CREATE INDEX idx_notes_job ON job_notes(job_id);
 
--- Crews (groups of staff)
+-- Crews (field staff/team members)
 CREATE TABLE IF NOT EXISTS crews (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     business_id     UUID REFERENCES businesses(id) ON DELETE CASCADE,
     name            VARCHAR(255) NOT NULL,
-    lead_staff_id   UUID REFERENCES booking_staff(id) ON DELETE SET NULL,
-    staff_ids       UUID[] NOT NULL,
+    role            VARCHAR(255),
+    email           VARCHAR(255),
+    phone           VARCHAR(50),
+    color           VARCHAR(50) DEFAULT 'emerald',
     active          BOOLEAN DEFAULT TRUE,
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
