@@ -639,46 +639,66 @@ def fieldpulse_legacy_login():
 
 @app.route("/fieldpulse/clerk-login")
 def clerk_login_page():
-    """Clerk authentication - redirects to Clerk hosted sign-in page."""
+    """Clerk authentication - uses hosted sign-in with immediate redirect."""
     clerk_pub_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
 
     if not clerk_pub_key:
-        # Clerk not configured - redirect to legacy login
         return redirect(url_for("fieldpulse_legacy_login"))
 
-    # Extract the instance domain from publishable key (base64 encoded after pk_test_)
+    # Extract the instance domain from publishable key
     import base64
     if clerk_pub_key.startswith("pk_test_"):
-        encoded = clerk_pub_key[8:]  # Remove 'pk_test_'
+        encoded = clerk_pub_key[8:]
     elif clerk_pub_key.startswith("pk_live_"):
-        encoded = clerk_pub_key[8:]  # Remove 'pk_live_'
+        encoded = clerk_pub_key[8:]
     else:
         encoded = clerk_pub_key
 
-    # Add padding if needed
     padding = 4 - len(encoded) % 4
     if padding != 4:
         encoded += '=' * padding
 
     try:
         domain = base64.b64decode(encoded).decode('utf-8')
-        # Strip null bytes and trailing $
         domain = domain.replace('\x00', '').rstrip('$')
-        # Use .accounts.dev not .clerk.accounts.dev
         domain = domain.replace('.clerk.accounts.dev', '.accounts.dev')
         clerk_domain = f"https://{domain}"
     except:
-        # Fallback to constructing domain
         key_part = clerk_pub_key.replace("pk_test_", "").replace("pk_live_", "")
         key_base = key_part.split('.')[0] if '.' in key_part else key_part
         clerk_domain = f"https://{key_base}.accounts.dev"
 
-    # Build absolute redirect URL (Clerk needs full URL, not relative)
     app_domain = os.environ.get("APP_DOMAIN", request.host_url.rstrip('/'))
     redirect_url = f"{app_domain}/fieldpulse/dashboard"
-    sign_in_url = f"{clerk_domain}/sign-in?redirect_url={redirect_url}"
 
-    return redirect(sign_in_url)
+    # Use Clerk's OAuth flow with immediate redirect
+    # This bypasses the welcome screen for already-authenticated users
+    sign_in_url = f"{clerk_domain}/sign-in?redirect_url={redirect_url}&_clerk_session_id="
+
+    return render_template_string(f"""
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldPulse — Sign In</title>
+    {TAILWIND_CDN}
+    {FIELD_PULSE_CSS}
+    <script>
+        // Redirect to Clerk hosted page immediately
+        window.location.replace("{sign_in_url}");
+    </script>
+</head>
+<body class="bg-slate-900 min-h-screen flex items-center justify-center">
+    <div class="text-center">
+        <div class="animate-spin w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+        <p class="text-slate-400">Redirecting to sign in...</p>
+        <p class="text-slate-600 text-sm mt-2">
+            <a href="{sign_in_url}" class="text-emerald-400 hover:text-emerald-300">Click here if not redirected</a>
+        </p>
+    </div>
+</body>
+</html>""")
 
 
 @app.route("/fieldpulse/clerk-signup")
@@ -722,6 +742,52 @@ def clerk_signup_page():
     sign_up_url = f"{clerk_domain}/sign-up?redirect_url={redirect_url}"
 
     return redirect(sign_up_url)
+
+
+@app.route("/fieldpulse/clerk-callback")
+def clerk_callback():
+    """Handle callback from Clerk hosted auth - syncs user and creates session."""
+    # Get the Clerk session token from cookie or query param
+    clerk_token = request.args.get('__session') or request.cookies.get('__session')
+
+    if not clerk_token:
+        # No token - redirect to login
+        return redirect(url_for('clerk_login_page'))
+
+    # Verify the token and get user info
+    from modules.clerk_auth import verify_clerk_jwt
+    claims = verify_clerk_jwt(clerk_token)
+
+    if not claims:
+        return redirect(url_for('clerk_login_page'))
+
+    clerk_user_id = claims.get('sub')
+    email = claims.get('email', '')
+
+    if not clerk_user_id:
+        return redirect(url_for('clerk_login_page'))
+
+    # Look up or create user in database
+    user = query_db(
+        "SELECT * FROM users WHERE clerk_user_id = %s OR email = %s",
+        (clerk_user_id, email), one=True
+    )
+
+    if user:
+        # Existing user - set session
+        session['fp_logged_in'] = True
+        session['fp_user_id'] = user['id']
+        session['fp_business_id'] = user.get('business_id')
+        session['fp_user_name'] = user.get('name', email.split('@')[0])
+
+        # Redirect to dashboard
+        return redirect('/fieldpulse/dashboard')
+    else:
+        # New user - need onboarding
+        # Store temp session data
+        session['clerk_user_id'] = clerk_user_id
+        session['clerk_email'] = email
+        return redirect('/fieldpulse/clerk-onboarding')
 
 
 @app.route("/fieldpulse/clerk-onboarding")
