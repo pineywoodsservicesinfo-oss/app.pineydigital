@@ -1716,6 +1716,34 @@ def fieldpulse_job_detail(job_id):
                             else:
                                 error = "Failed to upload photo to storage"
 
+        elif action == "delete_photo":
+            # Handle photo deletion
+            photo_id = request.form.get("photo_id", "").strip()
+            if not photo_id:
+                error = "No photo ID provided"
+            else:
+                try:
+                    # Get photo details before deleting
+                    photo = query_db(
+                        "SELECT id, photo_url FROM job_photos WHERE id = %s AND job_id = %s",
+                        (photo_id, job_id),
+                        one=True
+                    )
+                    if photo:
+                        # Delete from S3 first
+                        from modules.storage import delete_file
+                        delete_file(photo['photo_url'])
+
+                        # Delete from database
+                        query_db("DELETE FROM job_photos WHERE id = %s", (photo_id,))
+                        success = "Photo deleted successfully"
+                        logger.info(f"Photo {photo_id} deleted from job {job_id}")
+                    else:
+                        error = "Photo not found or access denied"
+                except Exception as e:
+                    logger.error(f"Error deleting photo {photo_id}: {e}")
+                    error = f"Error deleting photo: {str(e)}"
+
     # Get notes for this job
     notes = get_job_notes(job_id)
     notes_html = ""
@@ -1749,6 +1777,7 @@ def fieldpulse_job_detail(job_id):
             type_class = photo_type_colors.get(photo.get('photo_type', 'progress'), 'bg-slate-700 text-slate-400')
             type_label = escape(photo.get('photo_type', 'progress').replace('_', ' ').title())
             caption = escape(photo.get('caption', '') or '')
+            photo_id = photo.get('id', '')
             # Use presigned URL for viewing (bypasses access restrictions)
             photo_url = get_presigned_url(photo.get('photo_url', ''), expiration=3600)
             photos_html += f'''
@@ -1761,6 +1790,11 @@ def fieldpulse_job_detail(job_id):
                         </div>
                     </a>
                     <span class="absolute top-2 right-2 px-2 py-1 text-xs font-medium rounded border {type_class}">{type_label}</span>
+                    <form method="POST" class="absolute top-2 left-2" onsubmit="return confirm('Delete this photo?');">
+                        <input type="hidden" name="action" value="delete_photo">
+                        <input type="hidden" name="photo_id" value="{photo_id}">
+                        <button type="submit" class="bg-red-500/80 hover:bg-red-600 text-white text-xs px-2 py-1 rounded transition">🗑️</button>
+                    </form>
                 </div>
                 <div class="p-3">
                     <p class="text-xs text-slate-500 mb-1">{photo_time}</p>
