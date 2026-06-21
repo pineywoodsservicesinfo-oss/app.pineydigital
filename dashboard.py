@@ -706,61 +706,71 @@ def clerk_login_page():
     </div>
 
     <script type="module">
-        // Initialize Clerk
-        const clerk = window.Clerk;
-
+        // Wait for Clerk to load
         async function initClerk() {{
-            await clerk.load({{
-                // Optional: customize the appearance
-                appearance: {{
-                    variables: {{
-                        colorPrimary: '#10b981',  // emerald-500
-                        colorBackground: '#1e293b', // slate-800
-                        colorText: '#ffffff',
-                        colorTextSecondary: '#94a3b8', // slate-400
-                        colorInputBackground: '#0f172a', // slate-900
-                        colorInputBorder: '#334155', // slate-700
-                        borderRadius: '0.75rem',
-                    }},
-                    elements: {{
-                        formButtonPrimary: {{
-                            backgroundColor: '#10b981',
-                            '&:hover': {{ backgroundColor: '#059669' }},
-                        }},
-                    }}
-                }},
-                signInUrl: '/fieldpulse/clerk-login',
-                afterSignInUrl: '/fieldpulse/dashboard',
-                afterSignUpUrl: '/fieldpulse/clerk-onboarding',
-            }});
-
-            // Mount the SignIn component
-            const signInDiv = document.getElementById('clerk-signin');
-            if (signInDiv) {{
-                clerk.mountSignIn(signInDiv, {{
-                    routing: 'path',
-                    path: '/fieldpulse/clerk-login',
-                    signUpUrl: '/fieldpulse/clerk-signup',
-                }});
+            // Wait for window.Clerk to be available
+            let attempts = 0;
+            while (!window.Clerk && attempts < 50) {{
+                await new Promise(r => setTimeout(r, 100));
+                attempts++;
             }}
 
-            // Handle auth state changes
-            clerk.addListener(({{ user, session }}) => {{
-                if (user && session) {{
-                    // User is signed in - get the token and redirect
-                    session.getToken().then(token => {{
-                        if (token) {{
-                            // Store token in localStorage for API calls
-                            localStorage.setItem('__clerk_token', token);
-                            // Redirect to dashboard
-                            window.location.href = '/fieldpulse/dashboard';
+            if (!window.Clerk) {{
+                console.error('Clerk failed to load');
+                document.getElementById('clerk-signin').innerHTML =
+                    '<div class="text-red-400 text-center p-4">Failed to load authentication. Please refresh.</div>';
+                return;
+            }}
+
+            const clerk = window.Clerk;
+
+            try {{
+                await clerk.load({{
+                    appearance: {{
+                        variables: {{
+                            colorPrimary: '#10b981',
+                            colorBackground: '#1e293b',
+                            colorText: '#ffffff',
+                            colorTextSecondary: '#94a3b8',
+                            colorInputBackground: '#0f172a',
+                            colorInputBorder: '#334155',
+                            borderRadius: '0.75rem',
                         }}
+                    }},
+                    signInUrl: '/fieldpulse/clerk-login',
+                    afterSignInUrl: '/fieldpulse/dashboard',
+                    afterSignUpUrl: '/fieldpulse/clerk-onboarding',
+                }});
+
+                // Mount the SignIn component
+                const signInDiv = document.getElementById('clerk-signin');
+                if (signInDiv) {{
+                    clerk.mountSignIn(signInDiv, {{
+                        routing: 'path',
+                        path: '/fieldpulse/clerk-login',
+                        signUpUrl: '/fieldpulse/clerk-signup',
                     }});
                 }}
-            }});
+
+                // Handle auth state changes
+                clerk.addListener(({{ user, session }}) => {{
+                    if (user && session) {{
+                        session.getToken().then(token => {{
+                            if (token) {{
+                                localStorage.setItem('__clerk_token', token);
+                                window.location.href = '/fieldpulse/dashboard';
+                            }}
+                        }});
+                    }}
+                }});
+            }} catch (err) {{
+                console.error('Clerk init error:', err);
+                document.getElementById('clerk-signin').innerHTML =
+                    '<div class="text-red-400 text-center p-4">Authentication error: ' + err.message + '</div>';
+            }}
         }}
 
-        // Wait for Clerk to be ready
+        // Start initialization
         if (document.readyState === 'complete') {{
             initClerk();
         }} else {{
@@ -817,31 +827,50 @@ def clerk_signup_page():
     </div>
 
     <script type="module">
-        const clerk = window.Clerk;
-
         async function initClerk() {{
-            await clerk.load({{
-                appearance: {{
-                    variables: {{
-                        colorPrimary: '#10b981',
-                        colorBackground: '#1e293b',
-                        colorText: '#ffffff',
-                        colorTextSecondary: '#94a3b8',
-                        colorInputBackground: '#0f172a',
-                        colorInputBorder: '#334155',
-                        borderRadius: '0.75rem',
-                    }}
-                }},
-                afterSignUpUrl: '/fieldpulse/clerk-onboarding',
-            }});
+            let attempts = 0;
+            while (!window.Clerk && attempts < 50) {{
+                await new Promise(r => setTimeout(r, 100));
+                attempts++;
+            }}
 
-            const signUpDiv = document.getElementById('clerk-signup');
-            if (signUpDiv) {{
-                clerk.mountSignUp(signUpDiv, {{
-                    routing: 'path',
-                    path: '/fieldpulse/clerk-signup',
-                    signInUrl: '/fieldpulse/clerk-login',
+            if (!window.Clerk) {{
+                console.error('Clerk failed to load');
+                document.getElementById('clerk-signup').innerHTML =
+                    '<div class="text-red-400 text-center p-4">Failed to load. Please refresh.</div>';
+                return;
+            }}
+
+            const clerk = window.Clerk;
+
+            try {{
+                await clerk.load({{
+                    appearance: {{
+                        variables: {{
+                            colorPrimary: '#10b981',
+                            colorBackground: '#1e293b',
+                            colorText: '#ffffff',
+                            colorTextSecondary: '#94a3b8',
+                            colorInputBackground: '#0f172a',
+                            colorInputBorder: '#334155',
+                            borderRadius: '0.75rem',
+                        }}
+                    }},
+                    afterSignUpUrl: '/fieldpulse/clerk-onboarding',
                 }});
+
+                const signUpDiv = document.getElementById('clerk-signup');
+                if (signUpDiv) {{
+                    clerk.mountSignUp(signUpDiv, {{
+                        routing: 'path',
+                        path: '/fieldpulse/clerk-signup',
+                        signInUrl: '/fieldpulse/clerk-login',
+                    }});
+                }}
+            }} catch (err) {{
+                console.error('Clerk init error:', err);
+                document.getElementById('clerk-signup').innerHTML =
+                    '<div class="text-red-400 text-center p-4">Error: ' + err.message + '</div>';
             }}
         }}
 
