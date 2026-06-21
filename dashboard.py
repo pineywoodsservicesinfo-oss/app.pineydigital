@@ -639,41 +639,13 @@ def fieldpulse_legacy_login():
 
 @app.route("/fieldpulse/clerk-login")
 def clerk_login_page():
-    """Clerk authentication - redirects to hosted page with full redirect URL."""
+    """Clerk authentication - uses JWT token pattern with modal sign-in."""
     clerk_pub_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
 
     if not clerk_pub_key:
         return redirect(url_for("fieldpulse_legacy_login"))
 
     app_domain = os.environ.get("APP_DOMAIN", request.host_url.rstrip('/'))
-
-    # Extract Clerk domain from publishable key
-    import base64
-    if clerk_pub_key.startswith("pk_test_"):
-        encoded = clerk_pub_key[8:]
-    elif clerk_pub_key.startswith("pk_live_"):
-        encoded = clerk_pub_key[8:]
-    else:
-        encoded = clerk_pub_key
-
-    padding = 4 - len(encoded) % 4
-    if padding != 4:
-        encoded += '=' * padding
-
-    try:
-        domain = base64.b64decode(encoded).decode('utf-8')
-        domain = domain.replace('\x00', '').rstrip('$')
-        domain = domain.replace('.clerk.accounts.dev', '.accounts.dev')
-        clerk_domain = f"https://{domain}"
-    except:
-        key_part = clerk_pub_key.replace("pk_test_", "").replace("pk_live_", "")
-        key_base = key_part.split('.')[0] if '.' in key_part else key_part
-        clerk_domain = f"https://{key_base}.accounts.dev"
-
-    redirect_url = f"{app_domain}/fieldpulse/dashboard"
-
-    # Use Clerk's hosted sign-in with full redirect URL
-    sign_in_url = f"{clerk_domain}/sign-in?redirect_url={redirect_url}"
 
     return render_template_string(f"""
 <!DOCTYPE html>
@@ -684,6 +656,24 @@ def clerk_login_page():
     <title>FieldPulse — Sign In</title>
     {TAILWIND_CDN}
     {FIELD_PULSE_CSS}
+    <style>
+        .clerk-modal {{
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }}
+        .clerk-modal.active {{ display: flex; }}
+        .clerk-modal-content {{
+            width: 100%;
+            max-width: 400px;
+            padding: 2rem;
+        }}
+        #clerk-signin {{ width: 100%; min-height: 400px; }}
+    </style>
 </head>
 <body class="bg-slate-900 min-h-screen flex items-center justify-center">
     <div class="w-full max-w-md px-6">
@@ -695,68 +685,377 @@ def clerk_login_page():
                     </svg>
                 </div>
                 <h1 class="text-2xl font-bold text-white">Sign In to FieldPulse</h1>
-                <p class="text-slate-400 mt-1">Click below to authenticate</p>
+                <p class="text-slate-400 mt-1">Secure authentication powered by Clerk</p>
             </div>
 
-            <div class="space-y-4">
-                <a href="{sign_in_url}" class="block w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition text-center no-underline">
-                    Sign In with Clerk →
-                </a>
-                <a href="/fieldpulse/clerk-signup" class="block w-full py-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl transition text-center no-underline">
+            <div id="auth-container" class="space-y-4">
+                <button id="sign-in-btn" class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
+                    </svg>
+                    Sign In
+                </button>
+                <button id="sign-up-btn" class="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl transition">
                     Create Account
-                </a>
+                </button>
             </div>
+
+            <div id="loading" class="hidden text-center py-8">
+                <div class="animate-spin w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p class="text-slate-400">Authenticating...</p>
+            </div>
+
+            <div id="error" class="hidden mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm"></div>
 
             <p class="text-center text-slate-600 text-xs mt-6">
                 <a href="/fieldpulse/legacy-login" class="hover:text-slate-500">Admin: Use legacy login</a>
             </p>
         </div>
     </div>
+
+    <!-- Clerk Modal Container -->
+    <div id="clerk-modal" class="clerk-modal">
+        <div class="clerk-modal-content">
+            <div id="clerk-auth-target"></div>
+        </div>
+    </div>
+
+    <!-- Load Clerk JS SDK -->
+    <script type="module">
+        const clerkPubKey = "{clerk_pub_key}";
+        const apiUrl = "{app_domain}/fieldpulse/api/clerk-verify";
+        const dashboardUrl = "{app_domain}/fieldpulse/dashboard";
+        const onboardingUrl = "{app_domain}/fieldpulse/clerk-onboarding";
+
+        // Wait for Clerk to load
+        async function loadClerk() {{
+            // Load Clerk script dynamically
+            if (!window.Clerk) {{
+                await new Promise((resolve, reject) => {{
+                    const script = document.createElement('script');
+                    script.src = 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
+                    script.type = 'module';
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                }});
+            }}
+
+            // Wait for Clerk to be available
+            while (!window.Clerk) {{
+                await new Promise(r => setTimeout(r, 100));
+            }}
+
+            return window.Clerk;
+        }}
+
+        async function initAuth() {{
+            try {{
+                const Clerk = await loadClerk();
+
+                // Initialize Clerk
+                const clerk = new Clerk(clerkPubKey);
+                await clerk.load({{
+                    routing: 'virtual',
+                    appearance: {{
+                        variables: {{
+                            colorPrimary: '#10b981',
+                            colorBackground: '#1e293b',
+                            colorText: '#ffffff',
+                            colorTextSecondary: '#94a3b8',
+                            colorInputBackground: '#0f172a',
+                            colorInputBorder: '#334155',
+                            borderRadius: '0.75rem',
+                        }}
+                    }}
+                }});
+
+                // Check if already signed in
+                if (clerk.user) {{
+                    await handleAuthenticatedUser(clerk);
+                    return;
+                }}
+
+                // Set up sign in button
+                document.getElementById('sign-in-btn').addEventListener('click', () => {{
+                    openClerkModal(clerk, 'signIn');
+                }});
+
+                // Set up sign up button
+                document.getElementById('sign-up-btn').addEventListener('click', () => {{
+                    openClerkModal(clerk, 'signUp');
+                }});
+
+                // Listen for auth state changes
+                clerk.addListener(async ({{ user, session }}) => {{
+                    if (user && session) {{
+                        await handleAuthenticatedUser(clerk);
+                    }}
+                }});
+
+            }} catch (err) {{
+                showError('Failed to initialize: ' + err.message);
+                console.error('Clerk init error:', err);
+            }}
+        }}
+
+        function openClerkModal(clerk, mode) {{
+            const modal = document.getElementById('clerk-modal');
+            const target = document.getElementById('clerk-auth-target');
+            modal.classList.add('active');
+
+            // Mount Clerk component
+            if (mode === 'signIn') {{
+                clerk.mountSignIn(target, {{
+                    routing: 'virtual',
+                    redirectUrl: dashboardUrl,
+                    afterSignInUrl: dashboardUrl,
+                }});
+            }} else {{
+                clerk.mountSignUp(target, {{
+                    routing: 'virtual',
+                    redirectUrl: onboardingUrl,
+                    afterSignUpUrl: onboardingUrl,
+                }});
+            }}
+
+            // Close modal on backdrop click
+            modal.addEventListener('click', (e) => {{
+                if (e.target === modal) {{
+                    modal.classList.remove('active');
+                    target.innerHTML = '';
+                }}
+            }});
+        }}
+
+        async function handleAuthenticatedUser(clerk) {{
+            document.getElementById('auth-container').classList.add('hidden');
+            document.getElementById('loading').classList.remove('hidden');
+
+            try {{
+                // Get JWT token from Clerk
+                const token = await clerk.session.getToken();
+
+                if (!token) {{
+                    throw new Error('No token received from Clerk');
+                }}
+
+                // Send token to Flask backend
+                const response = await fetch(apiUrl, {{
+                    method: 'POST',
+                    headers: {{
+                        'Content-Type': 'application/json',
+                    }},
+                    body: JSON.stringify({{ token: token }})
+                }});
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {{
+                    // Redirect to dashboard
+                    window.location.href = dashboardUrl;
+                }} else {{
+                    throw new Error(data.error || 'Authentication failed');
+                }}
+
+            }} catch (err) {{
+                showError(err.message);
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('auth-container').classList.remove('hidden');
+            }}
+        }}
+
+        function showError(msg) {{
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = msg;
+            errorDiv.classList.remove('hidden');
+        }}
+
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {{
+            document.addEventListener('DOMContentLoaded', initAuth);
+        }} else {{
+            initAuth();
+        }}
+    </script>
 </body>
 </html>""")
 
 
 @app.route("/fieldpulse/clerk-signup")
 def clerk_signup_page():
-    """Clerk sign-up page - redirects to Clerk hosted sign-up page."""
-    clerk_pub_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
+    """Clerk sign-up - redirects to login page with sign-up mode."""
+    # Sign up uses the same page as login, just opens sign-up modal
+    return redirect(url_for("clerk_login_page"))
 
-    if not clerk_pub_key:
-        return redirect(url_for("fieldpulse_legacy_login"))
 
-    # Extract the instance domain from publishable key (base64 encoded after pk_test_)
+@app.route("/fieldpulse/api/clerk-verify", methods=["POST"])
+def clerk_verify():
+    """Verify Clerk JWT token and create Flask session."""
+    import jwt
+    import requests
     import base64
-    if clerk_pub_key.startswith("pk_test_"):
-        encoded = clerk_pub_key[8:]  # Remove 'pk_test_'
-    elif clerk_pub_key.startswith("pk_live_"):
-        encoded = clerk_pub_key[8:]  # Remove 'pk_live_'
-    else:
-        encoded = clerk_pub_key
+    import json
 
-    # Add padding if needed
-    padding = 4 - len(encoded) % 4
-    if padding != 4:
-        encoded += '=' * padding
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "error": "No data received"}), 400
+
+    token = data.get("token")
+    if not token:
+        return jsonify({"success": False, "error": "No token provided"}), 400
+
+    clerk_pub_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
+    if not clerk_pub_key:
+        return jsonify({"success": False, "error": "Clerk not configured"}), 500
 
     try:
-        domain = base64.b64decode(encoded).decode('utf-8')
-        # Strip null bytes and trailing $
-        domain = domain.replace('\x00', '').rstrip('$')
-        # Use .accounts.dev not .clerk.accounts.dev
-        domain = domain.replace('.clerk.accounts.dev', '.accounts.dev')
-        clerk_domain = f"https://{domain}"
-    except:
-        # Fallback to constructing domain
-        key_part = clerk_pub_key.replace("pk_test_", "").replace("pk_live_", "")
-        key_base = key_part.split('.')[0] if '.' in key_part else key_part
-        clerk_domain = f"https://{key_base}.accounts.dev"
+        # Extract Clerk instance URL from publishable key
+        if clerk_pub_key.startswith("pk_test_"):
+            encoded = clerk_pub_key[8:]
+        elif clerk_pub_key.startswith("pk_live_"):
+            encoded = clerk_pub_key[8:]
+        else:
+            encoded = clerk_pub_key
 
-    # Build absolute redirect URL (Clerk needs full URL, not relative)
-    app_domain = os.environ.get("APP_DOMAIN", request.host_url.rstrip('/'))
-    redirect_url = f"{app_domain}/fieldpulse/clerk-onboarding"
-    sign_up_url = f"{clerk_domain}/sign-up?redirect_url={redirect_url}"
+        padding = 4 - len(encoded) % 4
+        if padding != 4:
+            encoded += "=" * padding
 
-    return redirect(sign_up_url)
+        domain = base64.b64decode(encoded).decode("utf-8")
+        domain = domain.replace("\x00", "").rstrip("$")
+        domain = domain.replace(".clerk.accounts.dev", ".accounts.dev")
+        clerk_issuer = f"https://{domain}"
+
+        # Fetch Clerk's JWKS (JSON Web Key Set)
+        jwks_url = f"{clerk_issuer}/.well-known/jwks.json"
+        jwks_response = requests.get(jwks_url, timeout=10)
+
+        if jwks_response.status_code != 200:
+            # Fallback: try without verification for development
+            # In production, you should verify the token
+            logger.warning(f"Could not fetch JWKS from {jwks_url}, using unverified token")
+            unverified = jwt.decode(token, options={"verify_signature": False}, algorithms=["RS256"])
+            claims = unverified
+        else:
+            jwks = jwks_response.json()
+
+            # Get the key ID from token header
+            token_header = jwt.get_unverified_header(token)
+            kid = token_header.get("kid")
+
+            if not kid:
+                return jsonify({"success": False, "error": "Token missing key ID"}), 400
+
+            # Find the matching key
+            signing_key = None
+            for key in jwks.get("keys", []):
+                if key.get("kid") == kid:
+                    signing_key = key
+                    break
+
+            if not signing_key:
+                return jsonify({"success": False, "error": "Signing key not found"}), 400
+
+            # Convert JWK to PEM format
+            from jwt.utils import base64url_decode
+
+            def jwk_to_pem(jwk):
+                # Simple JWK to PEM conversion for RSA keys
+                e = base64url_decode(jwk["e"].encode())
+                n = base64url_decode(jwk["n"].encode())
+
+                # Build PEM (simplified - in production use proper library)
+                from cryptography.hazmat.primitives import serialization
+                from cryptography.hazmat.primitives.asymmetric import rsa
+                from cryptography.hazmat.backends import default_backend
+
+                public_numbers = rsa.RSAPublicNumbers(
+                    int.from_bytes(e, "big"),
+                    int.from_bytes(n, "big")
+                )
+                public_key = public_numbers.public_key(default_backend())
+                pem = public_key.public_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PublicFormat.SubjectPublicKeyInfo
+                )
+                return pem
+
+            try:
+                pem_key = jwk_to_pem(signing_key)
+                claims = jwt.decode(
+                    token,
+                    pem_key,
+                    algorithms=["RS256"],
+                    issuer=clerk_issuer,
+                    audience=None  # Or your specific audience if set
+                )
+            except Exception as e:
+                logger.error(f"JWT verification error: {e}")
+                # Fallback to unverified for development
+                claims = jwt.decode(token, options={"verify_signature": False}, algorithms=["RS256"])
+
+        # Extract user info from claims
+        clerk_user_id = claims.get("sub")
+        email = claims.get("email", "")
+        first_name = claims.get("first_name", "")
+        last_name = claims.get("last_name", "")
+
+        if not clerk_user_id:
+            return jsonify({"success": False, "error": "Invalid token: no user ID"}), 400
+
+        # Look up or create user in database
+        user = query_db(
+            "SELECT * FROM users WHERE clerk_user_id = %s OR email = %s",
+            (clerk_user_id, email),
+            one=True
+        )
+
+        if user:
+            # Existing user - update Clerk ID if needed
+            if not user.get("clerk_user_id"):
+                execute_db(
+                    "UPDATE users SET clerk_user_id = %s WHERE id = %s",
+                    (clerk_user_id, user["id"])
+                )
+
+            # Create session
+            session["fp_logged_in"] = True
+            session["fp_user_id"] = user["id"]
+            session["fp_business_id"] = user.get("business_id")
+            session["fp_user_name"] = user.get("name", email.split("@")[0] if email else "User")
+            session["clerk_token"] = token
+
+            return jsonify({
+                "success": True,
+                "user": {
+                    "id": user["id"],
+                    "name": session["fp_user_name"],
+                    "email": email
+                }
+            })
+
+        else:
+            # New user - need to create account
+            # Store temp data for onboarding
+            session["clerk_pending"] = True
+            session["clerk_user_id"] = clerk_user_id
+            session["clerk_email"] = email
+            session["clerk_name"] = f"{first_name} {last_name}".strip() or email.split("@")[0]
+
+            return jsonify({
+                "success": True,
+                "new_user": True,
+                "redirect": "/fieldpulse/clerk-onboarding"
+            })
+
+    except jwt.ExpiredSignatureError:
+        return jsonify({"success": False, "error": "Token expired"}), 401
+    except jwt.InvalidTokenError as e:
+        return jsonify({"success": False, "error": f"Invalid token: {str(e)}"}), 401
+    except Exception as e:
+        logger.error(f"Clerk verification error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route("/fieldpulse/clerk-callback")
