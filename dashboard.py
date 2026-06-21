@@ -49,6 +49,22 @@ from modules.security import (
 # Import storage module for S3 uploads
 from modules.storage import upload_file, is_configured as storage_configured, get_presigned_url
 
+# Import Clerk authentication (optional - falls back to session auth if not configured)
+try:
+    from modules.clerk_auth import (
+        clerk_login_required,
+        is_clerk_configured,
+        get_current_user as get_clerk_user,
+        require_business as require_clerk_business
+    )
+    CLERK_AVAILABLE = True
+except ImportError:
+    CLERK_AVAILABLE = False
+    clerk_login_required = None
+    is_clerk_configured = lambda: False
+    get_clerk_user = lambda: None
+    require_clerk_business = None
+
 app = Flask(__name__)
 
 # Security: Require these to be set in environment
@@ -104,11 +120,11 @@ def seed_fieldpulse_demo():
                         'owner@demolandscaping.com', '555-0100', 'trial', true)
                 ON CONFLICT (id) DO NOTHING
             """)
-            # Insert user
+            # Insert user with password hash for 'MasKatana@1'
             query_db("""
-                INSERT INTO users (id, business_id, email, name, role, active)
+                INSERT INTO users (id, business_id, email, password_hash, name, role, active)
                 VALUES ('634e6557-7baf-4894-8324-00058482c290', 'a1631c27-4b0d-4ecb-a684-2554c0acaa0e',
-                        'owner@demolandscaping.com', 'Demo Owner', 'owner', true)
+                        'owner@demolandscaping.com', '$2b$12$u5HC892kN3KIE7NXfD09PO2SFGLj4O.KBZ7EuCkjrOw.1dGpIXcDW', 'Demo Owner', 'owner', true)
                 ON CONFLICT (id) DO NOTHING
             """)
             # Insert sample job
@@ -121,6 +137,12 @@ def seed_fieldpulse_demo():
                 ON CONFLICT (id) DO NOTHING
             """)
             logger.info("Demo data seeded successfully!")
+        else:
+            # Ensure demo user has a password (for existing databases)
+            query_db("""
+                UPDATE users SET password_hash = '$2b$12$u5HC892kN3KIE7NXfD09PO2SFGLj4O.KBZ7EuCkjrOw.1dGpIXcDW'
+                WHERE email = 'owner@demolandscaping.com' AND (password_hash IS NULL OR password_hash = '')
+            """)
     except Exception as e:
         logger.error(f"Failed to seed demo data: {e}")
 
@@ -213,9 +235,27 @@ def login_required(f):
 
 
 def fp_login_required(f):
-    """FieldPulse login decorator - checks business session."""
+    """FieldPulse login decorator - checks Clerk JWT first, falls back to session auth."""
     @wraps(f)
     def decorated(*args, **kwargs):
+        # Try Clerk auth first if available and configured
+        if CLERK_AVAILABLE and is_clerk_configured():
+            # Check for Clerk JWT in request
+            from modules.clerk_auth import get_auth_token_from_request, verify_clerk_jwt
+            from flask import g
+
+            token = get_auth_token_from_request()
+            if token:
+                claims = verify_clerk_jwt(token)
+                if claims:
+                    g.clerk_user = claims
+                    g.user_id = claims.get("sub")
+                    return f(*args, **kwargs)
+
+            # No valid Clerk token - redirect to Clerk login
+            return redirect(url_for("clerk_login_page"))
+
+        # Fallback to legacy session auth
         if not session.get("fp_logged_in"):
             return redirect(url_for("fieldpulse_login"))
         return f(*args, **kwargs)
@@ -557,6 +597,274 @@ def fieldpulse_login():
 </html>""")
 
 
+# ── CLERK AUTHENTICATION ───────────────────────────────────────────
+
+@app.route("/fieldpulse/clerk-login")
+def clerk_login_page():
+    """Clerk authentication page with SignIn component."""
+    clerk_pub_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
+
+    if not clerk_pub_key:
+        # Clerk not configured - redirect to legacy login
+        return redirect(url_for("fieldpulse_login"))
+
+    # Extract domain from publishable key to get the correct frontend API
+    # pk_test_xxx -> https://xxx.clerk.accounts.dev
+    # pk_live_xxx -> https://xxx.clerk.accounts.dev
+    if clerk_pub_key.startswith("pk_test_"):
+        env = "development"
+    elif clerk_pub_key.startswith("pk_live_"):
+        env = "production"
+    else:
+        env = "development"
+
+    return render_template_string(f"""<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldPulse — Sign In</title>
+    {TAILWIND_CDN}
+    {FIELD_PULSE_CSS}
+    <!-- Clerk JavaScript SDK -->
+    <script
+        async
+        crossorigin="anonymous"
+        data-clerk-publishable-key="{clerk_pub_key}"
+        src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+        type="module"
+    ></script>
+</head>
+<body class="bg-slate-900 min-h-screen flex items-center justify-center">
+    <div class="w-full max-w-md px-6">
+        <div class="bg-slate-800 rounded-2xl shadow-2xl p-8 fade-in">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl mx-auto mb-4 flex items-center justify-center">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <h1 class="text-2xl font-bold text-white">FieldPulse</h1>
+                <p class="text-slate-400 mt-1">Field Service Management</p>
+            </div>
+
+            <!-- Clerk SignIn Component Container -->
+            <div id="clerk-signin" class="min-h-[400px]"></div>
+
+            <p class="text-center text-slate-500 text-sm mt-6">
+                Protected by Clerk authentication
+            </p>
+        </div>
+    </div>
+
+    <script type="module">
+        // Initialize Clerk
+        const clerk = window.Clerk;
+
+        async function initClerk() {{
+            await clerk.load({{
+                // Optional: customize the appearance
+                appearance: {{
+                    variables: {{
+                        colorPrimary: '#10b981',  // emerald-500
+                        colorBackground: '#1e293b', // slate-800
+                        colorText: '#ffffff',
+                        colorTextSecondary: '#94a3b8', // slate-400
+                        colorInputBackground: '#0f172a', // slate-900
+                        colorInputBorder: '#334155', // slate-700
+                        borderRadius: '0.75rem',
+                    }},
+                    elements: {{
+                        formButtonPrimary: {{
+                            backgroundColor: '#10b981',
+                            '&:hover': {{ backgroundColor: '#059669' }},
+                        }},
+                    }}
+                }},
+                signInUrl: '/fieldpulse/clerk-login',
+                afterSignInUrl: '/fieldpulse/dashboard',
+                afterSignUpUrl: '/fieldpulse/clerk-onboarding',
+            }});
+
+            // Mount the SignIn component
+            const signInDiv = document.getElementById('clerk-signin');
+            if (signInDiv) {{
+                clerk.mountSignIn(signInDiv, {{
+                    routing: 'path',
+                    path: '/fieldpulse/clerk-login',
+                    signUpUrl: '/fieldpulse/clerk-signup',
+                }});
+            }}
+
+            // Handle auth state changes
+            clerk.addListener(({{ user, session }}) => {{
+                if (user && session) {{
+                    // User is signed in - get the token and redirect
+                    session.getToken().then(token => {{
+                        if (token) {{
+                            // Store token in localStorage for API calls
+                            localStorage.setItem('__clerk_token', token);
+                            // Redirect to dashboard
+                            window.location.href = '/fieldpulse/dashboard';
+                        }}
+                    }});
+                }}
+            }});
+        }}
+
+        // Wait for Clerk to be ready
+        if (document.readyState === 'complete') {{
+            initClerk();
+        }} else {{
+            window.addEventListener('load', initClerk);
+        }}
+    </script>
+</body>
+</html>""")
+
+
+@app.route("/fieldpulse/clerk-signup")
+def clerk_signup_page():
+    """Clerk sign-up page."""
+    clerk_pub_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
+
+    if not clerk_pub_key:
+        return redirect(url_for("fieldpulse_login"))
+
+    return render_template_string(f"""<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldPulse — Sign Up</title>
+    {TAILWIND_CDN}
+    {FIELD_PULSE_CSS}
+    <script
+        async
+        crossorigin="anonymous"
+        data-clerk-publishable-key="{clerk_pub_key}"
+        src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+        type="module"
+    ></script>
+</head>
+<body class="bg-slate-900 min-h-screen flex items-center justify-center">
+    <div class="w-full max-w-md px-6">
+        <div class="bg-slate-800 rounded-2xl shadow-2xl p-8 fade-in">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl mx-auto mb-4 flex items-center justify-center">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <h1 class="text-2xl font-bold text-white">Create Account</h1>
+                <p class="text-slate-400 mt-1">Start your free trial</p>
+            </div>
+
+            <div id="clerk-signup" class="min-h-[500px]"></div>
+
+            <p class="text-center text-slate-500 text-sm mt-6">
+                Already have an account? <a href="/fieldpulse/clerk-login" class="text-emerald-400 hover:text-emerald-300">Sign in</a>
+            </p>
+        </div>
+    </div>
+
+    <script type="module">
+        const clerk = window.Clerk;
+
+        async function initClerk() {{
+            await clerk.load({{
+                appearance: {{
+                    variables: {{
+                        colorPrimary: '#10b981',
+                        colorBackground: '#1e293b',
+                        colorText: '#ffffff',
+                        colorTextSecondary: '#94a3b8',
+                        colorInputBackground: '#0f172a',
+                        colorInputBorder: '#334155',
+                        borderRadius: '0.75rem',
+                    }}
+                }},
+                afterSignUpUrl: '/fieldpulse/clerk-onboarding',
+            }});
+
+            const signUpDiv = document.getElementById('clerk-signup');
+            if (signUpDiv) {{
+                clerk.mountSignUp(signUpDiv, {{
+                    routing: 'path',
+                    path: '/fieldpulse/clerk-signup',
+                    signInUrl: '/fieldpulse/clerk-login',
+                }});
+            }}
+        }}
+
+        if (document.readyState === 'complete') {{
+            initClerk();
+        }} else {{
+            window.addEventListener('load', initClerk);
+        }}
+    </script>
+</body>
+</html>""")
+
+
+@app.route("/fieldpulse/clerk-onboarding")
+def clerk_onboarding():
+    """Onboarding page for new Clerk users - create business profile."""
+    return render_template_string(f"""<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldPulse — Welcome</title>
+    {TAILWIND_CDN}
+    {FIELD_PULSE_CSS}
+</head>
+<body class="bg-slate-900 min-h-screen flex items-center justify-center">
+    <div class="w-full max-w-lg px-6">
+        <div class="bg-slate-800 rounded-2xl shadow-2xl p-8 fade-in">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl mx-auto mb-4 flex items-center justify-center">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <h1 class="text-2xl font-bold text-white">Welcome to FieldPulse!</h1>
+                <p class="text-slate-400 mt-2">Let's set up your business profile</p>
+            </div>
+
+            <form method="POST" action="/fieldpulse/api/create-business" class="space-y-5">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Business Name</label>
+                    <input type="text" name="business_name" required
+                        class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
+                        placeholder="Acme Landscaping">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Your Name</label>
+                    <input type="text" name="user_name" required
+                        class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
+                        placeholder="John Smith">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Phone Number</label>
+                    <input type="tel" name="phone"
+                        class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
+                        placeholder="(555) 123-4567">
+                </div>
+
+                <button type="submit"
+                    class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition shadow-lg shadow-emerald-500/25">
+                    Get Started
+                </button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>""")
+
+
 def get_dashboard_data(business_id):
     """Get all dashboard data in a single database connection."""
     from migrations.db_config import get_db_connection, release_db_connection
@@ -880,12 +1188,122 @@ def fieldpulse_dashboard():
 
 @app.route("/fieldpulse/logout")
 def fieldpulse_logout():
-    """Logout from FieldPulse."""
+    """Logout from FieldPulse - handles both Clerk and legacy session auth."""
+    # Clear legacy session
     session.pop("fp_logged_in", None)
     session.pop("fp_user_id", None)
     session.pop("fp_business_id", None)
     session.pop("fp_user_name", None)
+
+    # If Clerk is configured, redirect to Clerk sign-out
+    if CLERK_AVAILABLE and is_clerk_configured():
+        clerk_pub_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
+        return render_template_string(f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <script
+                async
+                crossorigin="anonymous"
+                data-clerk-publishable-key="{clerk_pub_key}"
+                src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+                type="module"
+            ></script>
+        </head>
+        <body>
+            <script type="module">
+                const clerk = window.Clerk;
+                await clerk.load();
+                await clerk.signOut();
+                window.location.href = '/fieldpulse/clerk-login';
+            </script>
+        </body>
+        </html>""")
+
     return redirect(url_for("fieldpulse_login"))
+
+
+# ═════════════════════════════════════════════════════════════════
+# CLERK API ROUTES
+# ═════════════════════════════════════════════════════════════════
+
+@app.route("/fieldpulse/api/create-business", methods=["POST"])
+def api_create_business():
+    """Create business profile for new Clerk user."""
+    # This should be called after Clerk authentication
+    business_name = request.form.get("business_name", "").strip()
+    user_name = request.form.get("user_name", "").strip()
+    phone = request.form.get("phone", "").strip()
+
+    if not business_name or not user_name:
+        return jsonify({"error": "Business name and user name are required"}), 400
+
+    # For Clerk users, we'd get the user ID from the JWT
+    # For now, create with placeholder - can be linked later
+    try:
+        business_id = str(uuid.uuid4())
+        user_id = str(uuid.uuid4())
+
+        # Create business
+        execute_db("""
+            INSERT INTO businesses (id, name, slug, phone, plan, active, created_at)
+            VALUES (%s, %s, %s, %s, 'starter', true, NOW())
+        """, (business_id, business_name, business_name.lower().replace(" ", "-"), phone))
+
+        # Create user (will be linked to Clerk later)
+        execute_db("""
+            INSERT INTO users (id, business_id, email, password_hash, name, role, active)
+            VALUES (%s, %s, 'pending@fieldpulse.local', 'clerk_pending', %s, 'owner', true)
+        """, (user_id, business_id, user_name))
+
+        # Set session for legacy auth (will transition to Clerk tokens)
+        session["fp_logged_in"] = True
+        session["fp_user_id"] = user_id
+        session["fp_business_id"] = business_id
+        session["fp_user_name"] = user_name
+
+        return redirect("/fieldpulse/dashboard")
+
+    except Exception as e:
+        logger.error(f"Failed to create business: {e}")
+        return jsonify({"error": "Failed to create business"}), 500
+
+
+@app.route("/fieldpulse/api/clerk-webhook", methods=["POST"])
+def clerk_webhook():
+    """Handle Clerk webhooks for user events (signup, update, delete)."""
+    # Verify webhook signature
+    from modules.security import verify_webhook_signature
+
+    payload = request.get_data()
+    signature = request.headers.get("Svix-Signature", "")
+    webhook_secret = os.environ.get("CLERK_WEBHOOK_SECRET", "")
+
+    if not webhook_secret:
+        return jsonify({"error": "Webhook not configured"}), 500
+
+    if not verify_webhook_signature(payload, signature, webhook_secret):
+        return jsonify({"error": "Invalid signature"}), 401
+
+    event = request.json
+    event_type = event.get("type", "")
+
+    if event_type == "user.created":
+        # New user signed up via Clerk
+        user_data = event.get("data", {})
+        clerk_user_id = user_data.get("id")
+        email = user_data.get("email_addresses", [{}])[0].get("email_address", "")
+        first_name = user_data.get("first_name", "")
+        last_name = user_data.get("last_name", "")
+
+        # Create or update user in database
+        logger.info(f"New Clerk user: {clerk_user_id} ({email})")
+
+    elif event_type == "session.created":
+        # User signed in
+        pass
+
+    return jsonify({"status": "ok"})
 
 
 # ═════════════════════════════════════════════════════════════════
