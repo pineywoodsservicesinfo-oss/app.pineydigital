@@ -721,18 +721,19 @@ def fieldpulse_legacy_login():
 @app.route("/clerk-login")
 def clerk_login_page():
     """Clerk authentication - uses JWT token pattern with modal sign-in."""
-    clerk_pub_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
+    try:
+        clerk_pub_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
 
-    logger.info(f"Clerk login page - key present: {bool(clerk_pub_key)}")
+        logger.info(f"Clerk login page - key present: {bool(clerk_pub_key)}")
 
-    if not clerk_pub_key:
-        logger.warning("No CLERK_PUBLISHABLE_KEY, redirecting to legacy login")
-        return redirect(url_for("fieldpulse_legacy_login"))
+        if not clerk_pub_key:
+            logger.warning("No CLERK_PUBLISHABLE_KEY, redirecting to legacy login")
+            return redirect(url_for("fieldpulse_legacy_login"))
 
-    app_domain = os.environ.get("APP_DOMAIN", request.host_url.rstrip('/'))
-    logger.info(f"App domain: {app_domain}")
+        app_domain = os.environ.get("APP_DOMAIN", request.host_url.rstrip('/'))
+        logger.info(f"App domain: {app_domain}")
 
-    return render_template_string(f"""
+        return render_template_string(f"""
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -1007,6 +1008,12 @@ def clerk_login_page():
     </script>
 </body>
 </html>""")
+    except Exception as e:
+        logger.error(f"Error in clerk_login_page: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return f"""<!DOCTYPE html>
+<html><body><h1>Server Error</h1><p>Error: {str(e)}</p><pre>{traceback.format_exc()}</pre></body></html>""", 500
 
 
 @app.route("/clerk-signup")
