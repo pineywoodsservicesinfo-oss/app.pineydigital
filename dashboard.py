@@ -980,7 +980,8 @@ def clerk_login_page():
                     const redirectTo = data.redirect || dashboardUrl;
                     window.location.href = redirectTo;
                 }} else {{
-                    throw new Error(data.error || `Authentication failed (${response.status})`);
+                    const statusMsg = data.error || 'Authentication failed (HTTP ' + response.status + ')';
+                    throw new Error(statusMsg);
                 }}
 
             }} catch (err) {{
