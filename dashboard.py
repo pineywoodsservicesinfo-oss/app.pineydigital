@@ -238,11 +238,11 @@ def fp_login_required(f):
     """FieldPulse login decorator - checks Clerk JWT first, falls back to session auth."""
     @wraps(f)
     def decorated(*args, **kwargs):
+        from flask import g
+
         # Try Clerk auth first if available and configured
         if CLERK_AVAILABLE and is_clerk_configured():
-            # Check for Clerk JWT in request
             from modules.clerk_auth import get_auth_token_from_request, verify_clerk_jwt
-            from flask import g
 
             token = get_auth_token_from_request()
             if token:
@@ -250,7 +250,30 @@ def fp_login_required(f):
                 if claims:
                     g.clerk_user = claims
                     g.user_id = claims.get("sub")
-                    return f(*args, **kwargs)
+
+                    # Look up user and business from database
+                    clerk_user_id = claims.get("sub")
+                    email = claims.get("email", "")
+
+                    if clerk_user_id:
+                        user = query_db(
+                            "SELECT * FROM users WHERE clerk_user_id = %s OR email = %s",
+                            (clerk_user_id, email), one=True
+                        )
+
+                        if user:
+                            g.current_user = user
+                            g.current_business_id = user.get('business_id')
+
+                            # Get business details
+                            if user.get('business_id'):
+                                business = query_db(
+                                    "SELECT * FROM businesses WHERE id = %s AND active = true",
+                                    (user['business_id'],), one=True
+                                )
+                                g.current_business = business
+
+                            return f(*args, **kwargs)
 
             # No valid Clerk token - redirect to Clerk login
             return redirect(url_for("clerk_login_page"))
@@ -258,6 +281,17 @@ def fp_login_required(f):
         # Fallback to legacy session auth
         if not session.get("fp_logged_in"):
             return redirect(url_for("fieldpulse_login"))
+
+        # Legacy auth - get business from session
+        business_id = session.get("fp_business_id")
+        if business_id:
+            business = query_db(
+                "SELECT * FROM businesses WHERE id = %s AND active = true",
+                (business_id,), one=True
+            )
+            g.current_business = business
+            g.current_business_id = business_id
+
         return f(*args, **kwargs)
     return decorated
 
@@ -509,96 +543,10 @@ def fieldpulse_redirect():
     return redirect(url_for("fieldpulse_dashboard"))
 
 
-@app.route("/fieldpulse/login", methods=["GET", "POST"])
+@app.route("/fieldpulse/login")
 def fieldpulse_login():
-    """FieldPulse business login - redirects to Clerk when configured."""
-    # Redirect to Clerk login if configured
-    if CLERK_AVAILABLE and is_clerk_configured():
-        return redirect(url_for("clerk_login_page"))
-
-    error = ""
-
-    if request.method == "POST":
-        email = request.form.get("email", "").strip().lower()
-        password = request.form.get("password", "")
-
-        # Find user by email
-        user = query_db(
-            "SELECT * FROM users WHERE email = %s",
-            (email,),
-            one=True
-        )
-
-        if user and verify_password(password, user.get('password_hash', '')):
-            session["fp_logged_in"] = True
-            session["fp_user_id"] = user['id']
-            session["fp_business_id"] = user['business_id']
-            session["fp_user_name"] = user.get('name', email.split('@')[0])
-            session["csrf_token"] = generate_csrf_token()
-
-            # Update last login
-            query_db(
-                "UPDATE users SET last_login_at = NOW() WHERE id = %s",
-                (user['id'],)
-            )
-
-            return redirect(url_for("fieldpulse_dashboard"))
-        else:
-            error = "Invalid email or password."
-
-    return render_template_string(f"""<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FieldPulse — Login</title>
-    {TAILWIND_CDN}
-    {FIELD_PULSE_CSS}
-</head>
-<body class="bg-slate-900 min-h-screen flex items-center justify-center">
-    <div class="w-full max-w-md px-6">
-        <div class="bg-slate-800 rounded-2xl shadow-2xl p-8 fade-in">
-            <div class="text-center mb-8">
-                <div class="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl mx-auto mb-4 flex items-center justify-center">
-                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                    </svg>
-                </div>
-                <h1 class="text-2xl font-bold text-white">FieldPulse</h1>
-                <p class="text-slate-400 mt-1">Field Service Management</p>
-            </div>
-
-            {f'<div class="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">{error}</div>' if error else ''}
-
-            <form method="POST" class="space-y-5">
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-2">Email</label>
-                    <input type="email" name="email" required
-                        class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
-                        placeholder="owner@company.com"
-                        value="owner@demolandscaping.com">
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-2">Password</label>
-                    <input type="password" name="password" required
-                        class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
-                        placeholder="••••••••">
-                </div>
-
-                <button type="submit"
-                    class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition shadow-lg shadow-emerald-500/25">
-                    Sign In
-                </button>
-            </form>
-
-            <p class="text-center text-slate-500 text-sm mt-6">
-                Don't have an account? <a href="#" class="text-emerald-400 hover:text-emerald-300">Start free trial</a>
-            </p>
-        </div>
-    </div>
-</body>
-</html>""")
+    """FieldPulse login - always redirects to Clerk."""
+    return redirect(url_for("clerk_login_page"))
 
 
 @app.route("/fieldpulse/legacy-login", methods=["GET", "POST"])
@@ -695,8 +643,15 @@ def clerk_login_page():
     clerk_pub_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
 
     if not clerk_pub_key:
-        # Clerk not configured - redirect to legacy login
-        return redirect(url_for("fieldpulse_login"))
+        # Clerk not configured - show error
+        return render_template_string("""
+        <!DOCTYPE html>
+        <html class="dark"><body class="bg-slate-900 text-white text-center p-10">
+            <h1 class="text-2xl mb-4">Authentication Error</h1>
+            <p>Clerk is not configured. Please set CLERK_PUBLISHABLE_KEY.</p>
+            <a href="/fieldpulse/legacy-login" class="text-emerald-400">Use legacy login</a>
+        </body></html>
+        """), 500
 
     # Extract domain from publishable key to get the correct frontend API
     # pk_test_xxx -> https://xxx.clerk.accounts.dev
@@ -1389,12 +1344,82 @@ def clerk_webhook():
         first_name = user_data.get("first_name", "")
         last_name = user_data.get("last_name", "")
 
-        # Create or update user in database
         logger.info(f"New Clerk user: {clerk_user_id} ({email})")
 
+        # Check if this is admin user
+        is_admin = email.lower() == "joel@pineydigital.com"
+
+        try:
+            # Check if user already exists
+            existing = query_db(
+                "SELECT * FROM users WHERE email = %s OR clerk_user_id = %s",
+                (email, clerk_user_id),
+                one=True
+            )
+
+            if existing:
+                # Update with Clerk ID
+                execute_db(
+                    "UPDATE users SET clerk_user_id = %s, email_verified_clerk = true WHERE id = %s",
+                    (clerk_user_id, existing['id'])
+                )
+            else:
+                # Create new user
+                if is_admin:
+                    # Admin user - create admin business if not exists
+                    business = query_db(
+                        "SELECT * FROM businesses WHERE slug = 'admin' OR email = %s",
+                        (email,), one=True
+                    )
+
+                    if not business:
+                        # Create admin business
+                        business_id = str(uuid.uuid4())
+                        execute_db("""
+                            INSERT INTO businesses (id, name, slug, email, plan, active, clerk_user_id)
+                            VALUES (%s, 'Admin Business', 'admin', %s, 'enterprise', true, %s)
+                        """, (business_id, email, clerk_user_id))
+                    else:
+                        business_id = business['id']
+                        # Link to Clerk
+                        execute_db(
+                            "UPDATE businesses SET clerk_user_id = %s WHERE id = %s",
+                            (clerk_user_id, business_id)
+                        )
+
+                    # Create admin user
+                    user_id = str(uuid.uuid4())
+                    execute_db("""
+                        INSERT INTO users (id, business_id, email, clerk_user_id, name, role, active, email_verified_clerk)
+                        VALUES (%s, %s, %s, %s, %s, 'admin', true, true)
+                    """, (user_id, business_id, email, clerk_user_id, f"{first_name} {last_name}".strip() or "Admin"))
+
+                    logger.info(f"Created admin user for {email}")
+                else:
+                    # Regular user - will complete onboarding
+                    user_id = str(uuid.uuid4())
+                    execute_db("""
+                        INSERT INTO users (id, email, clerk_user_id, name, role, active, email_verified_clerk)
+                        VALUES (%s, %s, %s, %s, 'owner', true, true)
+                    """, (user_id, email, clerk_user_id, f"{first_name} {last_name}".strip() or email.split('@')[0]))
+
+                    logger.info(f"Created regular user for {email}")
+
+        except Exception as e:
+            logger.error(f"Failed to process Clerk user.created: {e}")
+
     elif event_type == "session.created":
-        # User signed in
-        pass
+        # User signed in - update last login
+        user_data = event.get("data", {}).get("user", {})
+        clerk_user_id = user_data.get("id")
+        if clerk_user_id:
+            try:
+                execute_db(
+                    "UPDATE users SET last_login_at = NOW() WHERE clerk_user_id = %s",
+                    (clerk_user_id,)
+                )
+            except Exception as e:
+                logger.error(f"Failed to update last_login: {e}")
 
     return jsonify({"status": "ok"})
 
