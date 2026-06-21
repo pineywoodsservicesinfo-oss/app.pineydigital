@@ -673,7 +673,10 @@ def clerk_login_page():
         key_base = key_part.split('.')[0] if '.' in key_part else key_part
         clerk_domain = f"https://{key_base}.accounts.dev"
 
-    sign_in_url = f"{clerk_domain}/sign-in?redirect_url=/fieldpulse/dashboard"
+    # Build absolute redirect URL (Clerk needs full URL, not relative)
+    app_domain = os.environ.get("APP_DOMAIN", request.host_url.rstrip('/'))
+    redirect_url = f"{app_domain}/fieldpulse/dashboard"
+    sign_in_url = f"{clerk_domain}/sign-in?redirect_url={redirect_url}"
 
     return redirect(sign_in_url)
 
@@ -713,9 +716,10 @@ def clerk_signup_page():
         key_base = key_part.split('.')[0] if '.' in key_part else key_part
         clerk_domain = f"https://{key_base}.accounts.dev"
 
-    # Build the Clerk hosted sign-up URL
-    clerk_domain = f"https://{key_base}.clerk.accounts.dev"
-    sign_up_url = f"{clerk_domain}/sign-up?redirect_url=/fieldpulse/clerk-onboarding"
+    # Build absolute redirect URL (Clerk needs full URL, not relative)
+    app_domain = os.environ.get("APP_DOMAIN", request.host_url.rstrip('/'))
+    redirect_url = f"{app_domain}/fieldpulse/clerk-onboarding"
+    sign_up_url = f"{clerk_domain}/sign-up?redirect_url={redirect_url}"
 
     return redirect(sign_up_url)
 
