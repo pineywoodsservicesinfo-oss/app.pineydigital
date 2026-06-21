@@ -1480,41 +1480,6 @@ def fieldpulse_new_job():
                             </button>
                         </div>
                     </div>
-                    <!-- Job Details Section -->
-                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                                </svg>
-                            </div>
-                            <h3 class="text-lg font-medium text-white">Job Details</h3>
-                        </div>
-
-                        <!-- Quick Select Job Types -->
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium text-slate-300 mb-2">Quick Select</label>
-                            <div class="flex flex-wrap gap-2">
-                                <button type="button" onclick="setJobType('Lawn Mowing')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-full transition">Lawn Mowing</button>
-                                <button type="button" onclick="setJobType('Hedge Trimming')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-full transition">Hedge Trimming</button>
-                                <button type="button" onclick="setJobType('Garden Cleanup')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-full transition">Garden Cleanup</button>
-                                <button type="button" onclick="setJobType('Mulching')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-full transition">Mulching</button>
-                                <button type="button" onclick="setJobType('Fertilization')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-full transition">Fertilization</button>
-                                <button type="button" onclick="setJobType('Weed Control')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-full transition">Weed Control</button>
-                            </div>
-                        </div>
-
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Job Title *</label>
-                                <input type="text" name="title" id="jobTitle" required class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="e.g., Weekly Lawn Maintenance">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Description</label>
-                                <textarea name="description" rows="3" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="Any special instructions or details..."></textarea>
-                            </div>
-                        </div>
-                    </div>
 
                     <!-- Step 2: Customer Information -->
                     <div id="step2" class="step-content hidden">
