@@ -742,24 +742,6 @@ def clerk_login_page():
     <title>FieldPulse — Sign In</title>
     {TAILWIND_CDN}
     {FIELD_PULSE_CSS}
-    <style>
-        .clerk-modal {{
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.8);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 50;
-        }}
-        .clerk-modal.active {{ display: flex; }}
-        .clerk-modal-content {{
-            width: 100%;
-            max-width: 400px;
-            padding: 2rem;
-        }}
-        #clerk-signin {{ width: 100%; min-height: 400px; }}
-    </style>
 </head>
 <body class="bg-slate-900 min-h-screen flex items-center justify-center">
     <div class="w-full max-w-md px-6">
@@ -796,13 +778,6 @@ def clerk_login_page():
             <p class="text-center text-slate-600 text-xs mt-6">
                 <a href="/legacy-login" class="hover:text-slate-500">Admin: Use legacy login</a>
             </p>
-        </div>
-    </div>
-
-    <!-- Clerk Modal Container -->
-    <div id="clerk-modal" class="clerk-modal">
-        <div class="clerk-modal-content">
-            <div id="clerk-auth-target"></div>
         </div>
     </div>
 
@@ -907,44 +882,50 @@ def clerk_login_page():
 
         function openClerkModal(clerk, mode) {{
             console.log('Opening Clerk modal:', mode);
-            const modal = document.getElementById('clerk-modal');
-            const target = document.getElementById('clerk-auth-target');
 
-            if (!modal || !target) {{
-                console.error('Modal elements not found');
-                return;
-            }}
-
-            modal.classList.add('active');
-
-            // Mount Clerk component
+            // Use Clerk's openSignIn/openSignUp methods instead of mount
+            // These work without UI components loaded
             try {{
                 if (mode === 'signIn') {{
-                    clerk.mountSignIn(target, {{
+                    clerk.openSignIn({{
                         routing: 'virtual',
                         redirectUrl: dashboardUrl,
                         afterSignInUrl: dashboardUrl,
+                        appearance: {{
+                            variables: {{
+                                colorPrimary: '#10b981',
+                                colorBackground: '#1e293b',
+                                colorText: '#ffffff',
+                                colorTextSecondary: '#94a3b8',
+                                colorInputBackground: '#0f172a',
+                                colorInputBorder: '#334155',
+                                borderRadius: '0.75rem',
+                            }}
+                        }}
                     }});
                 }} else {{
-                    clerk.mountSignUp(target, {{
+                    clerk.openSignUp({{
                         routing: 'virtual',
                         redirectUrl: onboardingUrl,
                         afterSignUpUrl: onboardingUrl,
+                        appearance: {{
+                            variables: {{
+                                colorPrimary: '#10b981',
+                                colorBackground: '#1e293b',
+                                colorText: '#ffffff',
+                                colorTextSecondary: '#94a3b8',
+                                colorInputBackground: '#0f172a',
+                                colorInputBorder: '#334155',
+                                borderRadius: '0.75rem',
+                            }}
+                        }}
                     }});
                 }}
-                console.log('Clerk component mounted');
+                console.log('Clerk modal opened');
             }} catch (err) {{
-                console.error('Failed to mount Clerk component:', err);
-                showError('Failed to open sign-in modal: ' + err.message);
+                console.error('Failed to open Clerk modal:', err);
+                showError('Failed to open sign-in: ' + err.message);
             }}
-
-            // Close modal on backdrop click
-            modal.addEventListener('click', (e) => {{
-                if (e.target === modal) {{
-                    modal.classList.remove('active');
-                    target.innerHTML = '';
-                }}
-            }});
         }}
 
         async function handleAuthenticatedUser(clerk) {{
