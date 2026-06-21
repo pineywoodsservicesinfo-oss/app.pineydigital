@@ -721,6 +721,11 @@ def fieldpulse_legacy_login():
 @app.route("/clerk-login")
 def clerk_login_page():
     """Clerk authentication - uses JWT token pattern with modal sign-in."""
+    # TEMPORARY: Disable Clerk until fully debugged
+    return redirect(url_for("fieldpulse_legacy_login"))
+
+    # TODO: Re-enable Clerk once JWT template issues are resolved
+    # See memory: Clerk debugging paused 2026-06-21
     try:
         clerk_pub_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
 
