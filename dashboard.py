@@ -661,13 +661,17 @@ def clerk_login_page():
         encoded += '=' * padding
 
     try:
-        domain = base64.b64decode(encoded).decode('utf-8').rstrip('\x00$')
+        domain = base64.b64decode(encoded).decode('utf-8')
+        # Strip null bytes and trailing $
+        domain = domain.replace('\x00', '').rstrip('$')
+        # Use .accounts.dev not .clerk.accounts.dev
+        domain = domain.replace('.clerk.accounts.dev', '.accounts.dev')
         clerk_domain = f"https://{domain}"
     except:
         # Fallback to constructing domain
         key_part = clerk_pub_key.replace("pk_test_", "").replace("pk_live_", "")
         key_base = key_part.split('.')[0] if '.' in key_part else key_part
-        clerk_domain = f"https://{key_base}.clerk.accounts.dev"
+        clerk_domain = f"https://{key_base}.accounts.dev"
 
     sign_in_url = f"{clerk_domain}/sign-in?redirect_url=/fieldpulse/dashboard"
 
@@ -697,13 +701,17 @@ def clerk_signup_page():
         encoded += '=' * padding
 
     try:
-        domain = base64.b64decode(encoded).decode('utf-8').rstrip('\x00$')
+        domain = base64.b64decode(encoded).decode('utf-8')
+        # Strip null bytes and trailing $
+        domain = domain.replace('\x00', '').rstrip('$')
+        # Use .accounts.dev not .clerk.accounts.dev
+        domain = domain.replace('.clerk.accounts.dev', '.accounts.dev')
         clerk_domain = f"https://{domain}"
     except:
         # Fallback to constructing domain
         key_part = clerk_pub_key.replace("pk_test_", "").replace("pk_live_", "")
         key_base = key_part.split('.')[0] if '.' in key_part else key_part
-        clerk_domain = f"https://{key_base}.clerk.accounts.dev"
+        clerk_domain = f"https://{key_base}.accounts.dev"
 
     # Build the Clerk hosted sign-up URL
     clerk_domain = f"https://{key_base}.clerk.accounts.dev"
