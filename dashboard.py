@@ -2329,3 +2329,560 @@ def fieldpulse_job_detail(job_id):
 </body>
 </html>
 """)
+
+
+@app.route("/fieldpulse/crews")
+@fp_login_required
+def fieldpulse_crews():
+    """Crew management - list all crews."""
+    business = get_business_from_session()
+    if not business:
+        return redirect(url_for("fieldpulse_logout"))
+
+    business_id = business["id"]
+    user_name = session.get("fp_user_name", "User")
+
+    # Get all crews for this business
+    crews = query_db(
+        """SELECT c.*,
+               (SELECT COUNT(*) FROM jobs WHERE crew_id = c.id AND status IN ('scheduled', 'in_progress')) as active_jobs
+           FROM crews c
+           WHERE c.business_id = %s AND c.active = true
+           ORDER BY c.name""",
+        (business_id,)
+    )
+
+    # Build crew cards
+    crew_cards = ""
+    color_options = [
+        ("emerald", "Emerald"),
+        ("blue", "Blue"),
+        ("purple", "Purple"),
+        ("amber", "Amber"),
+        ("rose", "Rose"),
+        ("cyan", "Cyan"),
+        ("orange", "Orange"),
+        ("pink", "Pink")
+    ]
+
+    for crew in crews:
+        color = crew.get("color", "emerald")
+        active_jobs = crew.get("active_jobs", 0)
+        crew_cards += f'''
+        <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden hover:border-slate-600 transition">
+            <div class="p-6">
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-center gap-4">
+                        <div class="w-14 h-14 rounded-xl bg-{color}-500/20 flex items-center justify-center">
+                            <span class="text-2xl font-bold text-{color}-400">{crew.get("name", "C")[:1].upper()}</span>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-white">{crew.get("name", "Unnamed Crew")}</h3>
+                            <p class="text-sm text-slate-400">{crew.get("role", "Team Member")}</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <a href="/fieldpulse/crews/{crew["id"]}/edit"
+                           class="p-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+                <div class="space-y-2 text-sm">
+                    {f'<div class="flex items-center gap-2 text-slate-400"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>{crew.get("email")}</div>' if crew.get("email") else ''}
+                    {f'<div class="flex items-center gap-2 text-slate-400"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>{crew.get("phone")}</div>' if crew.get("phone") else ''}
+                </div>
+            </div>
+            <div class="px-6 py-3 bg-slate-900/50 border-t border-slate-700 flex items-center justify-between">
+                <span class="text-sm text-slate-400">{active_jobs} active job{"s" if active_jobs != 1 else ""}</span>
+                <a href="/fieldpulse/jobs?crew={crew["id"]}" class="text-sm text-{color}-400 hover:text-{color}-300 transition">View jobs →</a>
+            </div>
+        </div>
+        '''
+
+    return render_template_string(base_html + f"""
+    <div class="flex h-screen bg-slate-900">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-slate-950 border-r border-slate-800 fixed h-full">
+            <div class="p-6">
+                <div class="flex items-center gap-3 mb-8">
+                    <div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg">FieldPulse</h1>
+                        <p class="text-xs text-slate-500">{business.get('name', 'Business')}</p>
+                    </div>
+                </div>
+
+                <nav class="space-y-1">
+                    <a href="/fieldpulse/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+                        </svg>
+                        Dashboard
+                    </a>
+                    <a href="/fieldpulse/jobs" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                        Jobs
+                    </a>
+                    <a href="#" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        Schedule
+                    </a>
+                    <a href="/fieldpulse/crews" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        Crews
+                    </a>
+                </nav>
+            </div>
+
+            <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
+                <div class="flex items-center gap-3 px-4 py-2">
+                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium">
+                        {user_name[:1].upper()}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-white truncate">{user_name}</p>
+                        <a href="/fieldpulse/logout" class="text-xs text-slate-500 hover:text-slate-400">Sign out</a>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 ml-64">
+            <!-- Header -->
+            <div class="bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
+                <div class="px-8 py-4 flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold text-white">Crew Management</h2>
+                        <p class="text-slate-400">Manage your team members and assignments</p>
+                    </div>
+                    <a href="/fieldpulse/crews/new" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium transition flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        Add Crew
+                    </a>
+                </div>
+            </div>
+
+            <div class="p-8">
+                {f'<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{crew_cards}</div>' if crew_cards else '''
+                <div class="text-center py-16">
+                    <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-slate-800 flex items-center justify-center">
+                        <svg class="w-10 h-10 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white mb-2">No crews yet</h3>
+                    <p class="text-slate-400 mb-6">Add your first crew member to start assigning jobs</p>
+                    <a href="/fieldpulse/crews/new" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition inline-flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        Add Your First Crew
+                    </a>
+                </div>
+                '''}
+            </div>
+        </main>
+    </div>
+""")
+
+
+@app.route("/fieldpulse/crews/new", methods=["GET", "POST"])
+@fp_login_required
+def fieldpulse_crew_new():
+    """Create a new crew member."""
+    business = get_business_from_session()
+    if not business:
+        return redirect(url_for("fieldpulse_logout"))
+
+    business_id = business["id"]
+    user_name = session.get("fp_user_name", "User")
+    error = None
+
+    color_options = [
+        ("emerald", "Emerald"),
+        ("blue", "Blue"),
+        ("purple", "Purple"),
+        ("amber", "Amber"),
+        ("rose", "Rose"),
+        ("cyan", "Cyan"),
+        ("orange", "Orange"),
+        ("pink", "Pink")
+    ]
+
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        role = request.form.get("role", "").strip()
+        email = request.form.get("email", "").strip()
+        phone = request.form.get("phone", "").strip()
+        color = request.form.get("color", "emerald")
+
+        if not name:
+            error = "Crew name is required"
+        else:
+            crew_id = str(uuid.uuid4())
+            execute_db("""
+                INSERT INTO crews (id, business_id, name, role, email, phone, color, active, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, true, NOW())
+            """, (crew_id, business_id, name, role or None, email or None, phone or None, color))
+
+            invalidate_cache(f"crews:{business_id}")
+            return redirect("/fieldpulse/crews")
+
+    color_options_html = ""
+    for val, label in color_options:
+        selected = "selected" if val == "emerald" else ""
+        color_options_html += f'<option value="{val}" {selected}>{label}</option>'
+
+    return render_template_string(base_html + f"""
+    <div class="flex h-screen bg-slate-900">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-slate-950 border-r border-slate-800 fixed h-full">
+            <div class="p-6">
+                <div class="flex items-center gap-3 mb-8">
+                    <div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg">FieldPulse</h1>
+                        <p class="text-xs text-slate-500">{business.get('name', 'Business')}</p>
+                    </div>
+                </div>
+
+                <nav class="space-y-1">
+                    <a href="/fieldpulse/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+                        </svg>
+                        Dashboard
+                    </a>
+                    <a href="/fieldpulse/jobs" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                        Jobs
+                    </a>
+                    <a href="#" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        Schedule
+                    </a>
+                    <a href="/fieldpulse/crews" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        Crews
+                    </a>
+                </nav>
+            </div>
+
+            <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
+                <div class="flex items-center gap-3 px-4 py-2">
+                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium">
+                        {user_name[:1].upper()}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-white truncate">{user_name}</p>
+                        <a href="/fieldpulse/logout" class="text-xs text-slate-500 hover:text-slate-400">Sign out</a>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 ml-64">
+            <!-- Header -->
+            <div class="bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
+                <div class="px-8 py-4 flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <a href="/fieldpulse/crews" class="text-slate-400 hover:text-white transition">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                            </svg>
+                        </a>
+                        <div>
+                            <h2 class="text-2xl font-bold text-white">Add New Crew</h2>
+                            <p class="text-slate-400">Create a new team member</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-8 max-w-2xl">
+                {f'<div class="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400">{error}</div>' if error else ''}
+
+                <form method="POST" class="bg-slate-800 rounded-xl border border-slate-700 p-6 space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Crew Name *</label>
+                        <input type="text" name="name" required
+                            class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                            placeholder="e.g., Mike's Maintenance Team">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Role</label>
+                        <input type="text" name="role"
+                            class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                            placeholder="e.g., Lead Landscaper, Technician">
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Email</label>
+                            <input type="email" name="email"
+                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                placeholder="crew@example.com">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Phone</label>
+                            <input type="tel" name="phone"
+                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                placeholder="(555) 123-4567">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Calendar Color</label>
+                        <select name="color"
+                            class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            {color_options_html}
+                        </select>
+                        <p class="text-xs text-slate-500 mt-1">This color will be used for the crew's assignments on the calendar</p>
+                    </div>
+
+                    <div class="flex justify-end gap-3 pt-4 border-t border-slate-700">
+                        <a href="/fieldpulse/crews" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition">Cancel</a>
+                        <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition">Create Crew</button>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+""")
+
+
+@app.route("/fieldpulse/crews/<crew_id>/edit", methods=["GET", "POST"])
+@fp_login_required
+def fieldpulse_crew_edit(crew_id):
+    """Edit a crew member."""
+    business = get_business_from_session()
+    if not business:
+        return redirect(url_for("fieldpulse_logout"))
+
+    business_id = business["id"]
+    user_name = session.get("fp_user_name", "User")
+    error = None
+
+    # Get crew details
+    crew = query_db(
+        "SELECT * FROM crews WHERE id = %s AND business_id = %s AND active = true",
+        (crew_id, business_id),
+        one=True
+    )
+
+    if not crew:
+        return redirect("/fieldpulse/crews")
+
+    color_options = [
+        ("emerald", "Emerald"),
+        ("blue", "Blue"),
+        ("purple", "Purple"),
+        ("amber", "Amber"),
+        ("rose", "Rose"),
+        ("cyan", "Cyan"),
+        ("orange", "Orange"),
+        ("pink", "Pink")
+    ]
+
+    if request.method == "POST":
+        action = request.form.get("action", "")
+
+        if action == "delete":
+            execute_db(
+                "UPDATE crews SET active = false WHERE id = %s AND business_id = %s",
+                (crew_id, business_id)
+            )
+            invalidate_cache(f"crews:{business_id}")
+            return redirect("/fieldpulse/crews")
+
+        name = request.form.get("name", "").strip()
+        role = request.form.get("role", "").strip()
+        email = request.form.get("email", "").strip()
+        phone = request.form.get("phone", "").strip()
+        color = request.form.get("color", "emerald")
+
+        if not name:
+            error = "Crew name is required"
+        else:
+            execute_db("""
+                UPDATE crews SET name = %s, role = %s, email = %s, phone = %s, color = %s
+                WHERE id = %s AND business_id = %s
+            """, (name, role or None, email or None, phone or None, color, crew_id, business_id))
+
+            invalidate_cache(f"crews:{business_id}")
+            return redirect("/fieldpulse/crews")
+
+    color_options_html = ""
+    current_color = crew.get("color", "emerald")
+    for val, label in color_options:
+        selected = "selected" if val == current_color else ""
+        color_options_html += f'<option value="{val}" {selected}>{label}</option>'
+
+    return render_template_string(base_html + f"""
+    <div class="flex h-screen bg-slate-900">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-slate-950 border-r border-slate-800 fixed h-full">
+            <div class="p-6">
+                <div class="flex items-center gap-3 mb-8">
+                    <div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg">FieldPulse</h1>
+                        <p class="text-xs text-slate-500">{business.get('name', 'Business')}</p>
+                    </div>
+                </div>
+
+                <nav class="space-y-1">
+                    <a href="/fieldpulse/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+                        </svg>
+                        Dashboard
+                    </a>
+                    <a href="/fieldpulse/jobs" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                        Jobs
+                    </a>
+                    <a href="#" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        Schedule
+                    </a>
+                    <a href="/fieldpulse/crews" class="sidebar-link active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        Crews
+                    </a>
+                </nav>
+            </div>
+
+            <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
+                <div class="flex items-center gap-3 px-4 py-2">
+                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium">
+                        {user_name[:1].upper()}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-white truncate">{user_name}</p>
+                        <a href="/fieldpulse/logout" class="text-xs text-slate-500 hover:text-slate-400">Sign out</a>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 ml-64">
+            <!-- Header -->
+            <div class="bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
+                <div class="px-8 py-4 flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <a href="/fieldpulse/crews" class="text-slate-400 hover:text-white transition">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                            </svg>
+                        </a>
+                        <div>
+                            <h2 class="text-2xl font-bold text-white">Edit Crew</h2>
+                            <p class="text-slate-400">Update crew member details</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-8 max-w-2xl">
+                {f'<div class="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400">{error}</div>' if error else ''}
+
+                <form method="POST" class="bg-slate-800 rounded-xl border border-slate-700 p-6 space-y-6">
+                    <input type="hidden" name="action" value="update">
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Crew Name *</label>
+                        <input type="text" name="name" value="{crew.get('name', '')}" required
+                            class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                            placeholder="e.g., Mike's Maintenance Team">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Role</label>
+                        <input type="text" name="role" value="{crew.get('role', '') or ''}"
+                            class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                            placeholder="e.g., Lead Landscaper, Technician">
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Email</label>
+                            <input type="email" name="email" value="{crew.get('email', '') or ''}"
+                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                placeholder="crew@example.com">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Phone</label>
+                            <input type="tel" name="phone" value="{crew.get('phone', '') or ''}"
+                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                placeholder="(555) 123-4567">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Calendar Color</label>
+                        <select name="color"
+                            class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                            {color_options_html}
+                        </select>
+                        <p class="text-xs text-slate-500 mt-1">This color will be used for the crew's assignments on the calendar</p>
+                    </div>
+
+                    <div class="flex justify-between items-center pt-4 border-t border-slate-700">
+                        <button type="submit" name="action" value="delete"
+                            class="text-red-400 hover:text-red-300 px-4 py-2 rounded-lg transition flex items-center gap-2"
+                            onclick="return confirm('Are you sure you want to remove this crew member?')">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                            Remove Crew
+                        </button>
+                        <div class="flex gap-3">
+                            <a href="/fieldpulse/crews" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition">Cancel</a>
+                            <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition">Save Changes</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+""")
