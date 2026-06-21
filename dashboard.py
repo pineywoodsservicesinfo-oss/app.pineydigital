@@ -947,8 +947,8 @@ def clerk_login_page():
             document.getElementById('loading').classList.remove('hidden');
 
             try {{
-                // Get JWT token from Clerk
-                const token = await clerk.session.getToken();
+                // Get JWT token from Clerk using custom template
+                const token = await clerk.session.getToken({ template: "fieldpulse-template" });
 
                 if (!token) {{
                     throw new Error('No token received from Clerk');
