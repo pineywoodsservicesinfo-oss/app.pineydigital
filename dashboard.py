@@ -1121,6 +1121,10 @@ def clerk_verify():
         first_name = claims.get("first_name", "")
         last_name = claims.get("last_name", "")
 
+        # Debug logging
+        logger.info(f"Clerk JWT claims: sub={clerk_user_id}, email={email}")
+        logger.debug(f"Full claims: {claims}")
+
         if not clerk_user_id:
             return jsonify({"success": False, "error": "Invalid token: no user ID"}), 400
 
