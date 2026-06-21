@@ -1392,52 +1392,114 @@ def fieldpulse_new_job():
                 </div>
             </header>
 
-            <div class="p-8 max-w-2xl">
+            <div class="p-8 max-w-3xl">
                 {f'<div class="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400">{error}</div>' if error else ''}
 
-                <form method="POST" class="space-y-6">
+                <!-- Progress Steps -->
+                <div class="flex items-center gap-4 mb-8">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center text-sm font-medium">1</div>
+                        <span class="text-sm text-white font-medium">Job</span>
+                    </div>
+                    <div class="flex-1 h-px bg-slate-700"></div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-full bg-slate-700 text-slate-400 flex items-center justify-center text-sm font-medium">2</div>
+                        <span class="text-sm text-slate-400">Customer</span>
+                    </div>
+                    <div class="flex-1 h-px bg-slate-700"></div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-full bg-slate-700 text-slate-400 flex items-center justify-center text-sm font-medium">3</div>
+                        <span class="text-sm text-slate-400">Schedule</span>
+                    </div>
+                </div>
+
+                <form method="POST" class="space-y-6" id="jobForm">
+                    <!-- Job Details Section -->
                     <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
-                        <h3 class="text-lg font-medium text-white mb-4">Job Details</h3>
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                                </svg>
+                            </div>
+                            <h3 class="text-lg font-medium text-white">Job Details</h3>
+                        </div>
+
+                        <!-- Quick Select Job Types -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Quick Select</label>
+                            <div class="flex flex-wrap gap-2">
+                                <button type="button" onclick="setJobType('Lawn Mowing')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-full transition">Lawn Mowing</button>
+                                <button type="button" onclick="setJobType('Hedge Trimming')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-full transition">Hedge Trimming</button>
+                                <button type="button" onclick="setJobType('Garden Cleanup')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-full transition">Garden Cleanup</button>
+                                <button type="button" onclick="setJobType('Mulching')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-full transition">Mulching</button>
+                                <button type="button" onclick="setJobType('Fertilization')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-full transition">Fertilization</button>
+                                <button type="button" onclick="setJobType('Weed Control')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm rounded-full transition">Weed Control</button>
+                            </div>
+                        </div>
+
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Job Title *</label>
-                                <input type="text" name="title" required class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                <input type="text" name="title" id="jobTitle" required class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="e.g., Weekly Lawn Maintenance">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Description</label>
-                                <textarea name="description" rows="3" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"></textarea>
+                                <textarea name="description" rows="3" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="Any special instructions or details..."></textarea>
                             </div>
                         </div>
                     </div>
 
+                    <!-- Customer Section -->
                     <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
-                        <h3 class="text-lg font-medium text-white mb-4">Customer Information</h3>
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                                </svg>
+                            </div>
+                            <h3 class="text-lg font-medium text-white">Customer Information</h3>
+                        </div>
+
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div class="md:col-span-2">
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Customer Name *</label>
-                                <input type="text" name="customer_name" required class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                <input type="text" name="customer_name" required class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="e.g., John Smith">
+                                <p class="text-xs text-slate-500 mt-1">Type to search existing customers</p>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Phone</label>
-                                <input type="tel" name="customer_phone" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                <input type="tel" name="customer_phone" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="(555) 123-4567">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Email</label>
-                                <input type="email" name="customer_email" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                <input type="email" name="customer_email" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="john@example.com">
                             </div>
                             <div class="md:col-span-2">
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Address</label>
-                                <input type="text" name="address" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                <input type="text" name="address" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="123 Main Street">
                             </div>
-                            <div class="md:col-span-2">
+                            <div>
                                 <label class="block text-sm font-medium text-slate-300 mb-2">City</label>
-                                <input type="text" name="city" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                <input type="text" name="city" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="Springfield">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">ZIP Code</label>
+                                <input type="text" name="zip_code" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="12345">
                             </div>
                         </div>
                     </div>
 
+                    <!-- Scheduling Section -->
                     <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
-                        <h3 class="text-lg font-medium text-white mb-4">Scheduling</h3>
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                </svg>
+                            </div>
+                            <h3 class="text-lg font-medium text-white">Scheduling</h3>
+                        </div>
 
                         <!-- Date Selection -->
                         <div class="mb-6">
@@ -1446,7 +1508,7 @@ def fieldpulse_new_job():
                                 class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-lg"
                                 style="color-scheme: dark;"
                                 min="{datetime.now().strftime('%Y-%m-%d')}">
-                            <p class="text-xs text-slate-500 mt-2">Click to open calendar • Minimum date is today</p>
+                            <p class="text-xs text-slate-500 mt-2">Select a date from the calendar</p>
                         </div>
 
                         <!-- Time Selection -->
@@ -1538,11 +1600,73 @@ def fieldpulse_new_job():
                         </div>
                     </div>
 
-                    <div class="flex gap-4">
-                        <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition">Create Job</button>
-                        <a href="/fieldpulse/jobs" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition">Cancel</a>
+                    <!-- Sticky Action Bar -->
+                    <div class="sticky bottom-6 bg-slate-800/95 backdrop-blur rounded-xl p-4 border border-slate-700 shadow-lg">
+                        <div class="flex items-center justify-between">
+                            <a href="/fieldpulse/jobs" class="text-slate-400 hover:text-white transition flex items-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                                </svg>
+                                Cancel
+                            </a>
+                            <div class="flex gap-3">
+                                <button type="button" onclick="saveDraft()" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2.5 rounded-lg font-medium transition flex items-center gap-2">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+                                    </svg>
+                                    Save Draft
+                                </button>
+                                <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-lg font-medium transition flex items-center gap-2">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                                    </svg>
+                                    Create Job
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </form>
+
+                <script>
+                    // Set job type helper
+                    function setJobType(title) {{
+                        document.getElementById('jobTitle').value = title;
+                        // Add a subtle flash effect
+                        document.getElementById('jobTitle').classList.add('ring-2', 'ring-emerald-500');
+                        setTimeout(function() {{
+                            document.getElementById('jobTitle').classList.remove('ring-2', 'ring-emerald-500');
+                        }}, 300);
+                    }}
+
+                    // Save draft function
+                    function saveDraft() {{
+                        // Store form data in localStorage
+                        const form = document.getElementById('jobForm');
+                        const formData = new FormData(form);
+                        const data = Object.fromEntries(formData);
+                        localStorage.setItem('jobDraft', JSON.stringify(data));
+                        alert('Draft saved! You can return to this later.');
+                    }}
+
+                    // Load draft on page load
+                    window.addEventListener('load', function() {{
+                        const draft = localStorage.getItem('jobDraft');
+                        if (draft) {{
+                            const data = JSON.parse(draft);
+                            Object.keys(data).forEach(function(key) {{
+                                const input = document.querySelector('[name="' + key + '"]');
+                                if (input && !input.value) {{
+                                    input.value = data[key];
+                                }}
+                            }});
+                        }}
+                    }});
+
+                    // Clear draft on successful submit
+                    document.getElementById('jobForm').addEventListener('submit', function() {{
+                        localStorage.removeItem('jobDraft');
+                    }});
+                </script>
             </div>
         </main>
     </div>
