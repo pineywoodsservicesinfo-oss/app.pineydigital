@@ -2422,8 +2422,17 @@ def fieldpulse_crews():
         </div>
         '''
 
-    return render_template_string(base_html + f"""
-    <div class="flex h-screen bg-slate-900">
+    return render_template_string(f"""<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldPulse — Crews</title>
+    {TAILWIND_CDN}
+    {FIELD_PULSE_CSS}
+</head>
+<body class="bg-slate-900 text-white">
+    <div class="flex h-screen">
         <!-- Sidebar -->
         <aside class="w-64 bg-slate-950 border-r border-slate-800 fixed h-full">
             <div class="p-6">
@@ -2519,7 +2528,8 @@ def fieldpulse_crews():
             </div>
         </main>
     </div>
-""")
+</body>
+</html>""")
 
 
 @app.route("/fieldpulse/crews/new", methods=["GET", "POST"])
@@ -2569,8 +2579,17 @@ def fieldpulse_crew_new():
         selected = "selected" if val == "emerald" else ""
         color_options_html += f'<option value="{val}" {selected}>{label}</option>'
 
-    return render_template_string(base_html + f"""
-    <div class="flex h-screen bg-slate-900">
+    return render_template_string(f"""<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldPulse — Add Crew</title>
+    {TAILWIND_CDN}
+    {FIELD_PULSE_CSS}
+</head>
+<body class="bg-slate-900 text-white">
+    <div class="flex h-screen">
         <!-- Sidebar -->
         <aside class="w-64 bg-slate-950 border-r border-slate-800 fixed h-full">
             <div class="p-6">
@@ -2696,7 +2715,8 @@ def fieldpulse_crew_new():
             </div>
         </main>
     </div>
-""")
+</body>
+</html>""")
 
 
 @app.route("/fieldpulse/crews/<crew_id>/edit", methods=["GET", "POST"])
@@ -2766,8 +2786,17 @@ def fieldpulse_crew_edit(crew_id):
         selected = "selected" if val == current_color else ""
         color_options_html += f'<option value="{val}" {selected}>{label}</option>'
 
-    return render_template_string(base_html + f"""
-    <div class="flex h-screen bg-slate-900">
+    return render_template_string(f"""<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldPulse — Edit Crew</title>
+    {TAILWIND_CDN}
+    {FIELD_PULSE_CSS}
+</head>
+<body class="bg-slate-900 text-white">
+    <div class="flex h-screen">
         <!-- Sidebar -->
         <aside class="w-64 bg-slate-950 border-r border-slate-800 fixed h-full">
             <div class="p-6">
@@ -2905,4 +2934,5 @@ def fieldpulse_crew_edit(crew_id):
             </div>
         </main>
     </div>
-""")
+</body>
+</html>""")
