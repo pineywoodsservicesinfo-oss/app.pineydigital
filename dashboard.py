@@ -995,6 +995,16 @@ def admin_migrate():
             except Exception:
                 pass  # Column may already be TEXT or table doesn't exist yet
 
+            # Migration: Extend crews table with additional fields
+            try:
+                query_db("ALTER TABLE crews ADD COLUMN IF NOT EXISTS color VARCHAR(50) DEFAULT 'emerald'")
+                query_db("ALTER TABLE crews ADD COLUMN IF NOT EXISTS role VARCHAR(255)")
+                query_db("ALTER TABLE crews ADD COLUMN IF NOT EXISTS email VARCHAR(255)")
+                query_db("ALTER TABLE crews ADD COLUMN IF NOT EXISTS phone VARCHAR(50)")
+                query_db("CREATE INDEX IF NOT EXISTS idx_crews_active ON crews(active)")
+            except Exception as e:
+                return jsonify({"status": "error", "message": f"Crews migration failed: {str(e)}"}), 500
+
             return jsonify({"status": "success", "message": "Migration completed successfully!"})
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)}), 500
@@ -1006,7 +1016,7 @@ def admin_migrate():
 
 <div style="background:#f3f4f6;padding:20px;border-radius:8px;margin-bottom:20px">
     <h3>Database Migration</h3>
-    <p>Create job_notes and job_photos tables.</p>
+    <p>Creates: job_notes table, job_photos table, extends crews table (color, role, email, phone).</p>
     <form method="POST">
         <button type="submit" style="padding:10px 20px;background:#10b981;color:white;border:none;border-radius:6px;cursor:pointer">Run Migration</button>
     </form>
