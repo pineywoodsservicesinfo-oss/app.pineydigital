@@ -511,7 +511,11 @@ def fieldpulse_redirect():
 
 @app.route("/fieldpulse/login", methods=["GET", "POST"])
 def fieldpulse_login():
-    """FieldPulse business login."""
+    """FieldPulse business login - redirects to Clerk when configured."""
+    # Redirect to Clerk login if configured
+    if CLERK_AVAILABLE and is_clerk_configured():
+        return redirect(url_for("clerk_login_page"))
+
     error = ""
 
     if request.method == "POST":
@@ -597,6 +601,92 @@ def fieldpulse_login():
 </html>""")
 
 
+@app.route("/fieldpulse/legacy-login", methods=["GET", "POST"])
+def fieldpulse_legacy_login():
+    """Legacy login form - bypasses Clerk redirect for admin access."""
+    error = ""
+
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+
+        user = query_db(
+            "SELECT * FROM users WHERE email = %s",
+            (email,),
+            one=True
+        )
+
+        if user and verify_password(password, user.get('password_hash', '')):
+            session["fp_logged_in"] = True
+            session["fp_user_id"] = user['id']
+            session["fp_business_id"] = user['business_id']
+            session["fp_user_name"] = user.get('name', email.split('@')[0])
+            session["csrf_token"] = generate_csrf_token()
+
+            query_db(
+                "UPDATE users SET last_login_at = NOW() WHERE id = %s",
+                (user['id'],)
+            )
+
+            return redirect(url_for("fieldpulse_dashboard"))
+        else:
+            error = "Invalid email or password."
+
+    return render_template_string(f"""<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldPulse — Legacy Login</title>
+    {TAILWIND_CDN}
+    {FIELD_PULSE_CSS}
+</head>
+<body class="bg-slate-900 min-h-screen flex items-center justify-center">
+    <div class="w-full max-w-md px-6">
+        <div class="bg-slate-800 rounded-2xl shadow-2xl p-8 fade-in">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl mx-auto mb-4 flex items-center justify-center">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <h1 class="text-2xl font-bold text-white">FieldPulse</h1>
+                <p class="text-slate-400 mt-1">Legacy Login (Admin Only)</p>
+            </div>
+
+            {f'<div class="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">{error}</div>' if error else ''}
+
+            <form method="POST" class="space-y-5">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Email</label>
+                    <input type="email" name="email" required
+                        class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
+                        placeholder="owner@company.com"
+                        value="owner@demolandscaping.com">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Password</label>
+                    <input type="password" name="password" required
+                        class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
+                        placeholder="••••••••">
+                </div>
+
+                <button type="submit"
+                    class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition shadow-lg shadow-emerald-500/25">
+                    Sign In
+                </button>
+            </form>
+
+            <p class="text-center text-slate-500 text-sm mt-6">
+                <a href="/fieldpulse/clerk-login" class="text-emerald-400 hover:text-emerald-300">← Back to Clerk login</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>""")
+
+
 # ── CLERK AUTHENTICATION ───────────────────────────────────────────
 
 @app.route("/fieldpulse/clerk-login")
@@ -653,6 +743,9 @@ def clerk_login_page():
 
             <p class="text-center text-slate-500 text-sm mt-6">
                 Protected by Clerk authentication
+            </p>
+            <p class="text-center text-slate-600 text-xs mt-2">
+                <a href="/fieldpulse/legacy-login" class="hover:text-slate-500">Admin: Use legacy login</a>
             </p>
         </div>
     </div>
