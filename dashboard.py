@@ -639,41 +639,13 @@ def fieldpulse_legacy_login():
 
 @app.route("/fieldpulse/clerk-login")
 def clerk_login_page():
-    """Clerk authentication - uses hosted sign-in with immediate redirect."""
+    """Clerk authentication - uses OAuth popup flow for cross-domain auth."""
     clerk_pub_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
 
     if not clerk_pub_key:
         return redirect(url_for("fieldpulse_legacy_login"))
 
-    # Extract the instance domain from publishable key
-    import base64
-    if clerk_pub_key.startswith("pk_test_"):
-        encoded = clerk_pub_key[8:]
-    elif clerk_pub_key.startswith("pk_live_"):
-        encoded = clerk_pub_key[8:]
-    else:
-        encoded = clerk_pub_key
-
-    padding = 4 - len(encoded) % 4
-    if padding != 4:
-        encoded += '=' * padding
-
-    try:
-        domain = base64.b64decode(encoded).decode('utf-8')
-        domain = domain.replace('\x00', '').rstrip('$')
-        domain = domain.replace('.clerk.accounts.dev', '.accounts.dev')
-        clerk_domain = f"https://{domain}"
-    except:
-        key_part = clerk_pub_key.replace("pk_test_", "").replace("pk_live_", "")
-        key_base = key_part.split('.')[0] if '.' in key_part else key_part
-        clerk_domain = f"https://{key_base}.accounts.dev"
-
     app_domain = os.environ.get("APP_DOMAIN", request.host_url.rstrip('/'))
-    redirect_url = f"{app_domain}/fieldpulse/dashboard"
-
-    # Use Clerk's OAuth flow with immediate redirect
-    # This bypasses the welcome screen for already-authenticated users
-    sign_in_url = f"{clerk_domain}/sign-in?redirect_url={redirect_url}&_clerk_session_id="
 
     return render_template_string(f"""
 <!DOCTYPE html>
@@ -684,19 +656,122 @@ def clerk_login_page():
     <title>FieldPulse — Sign In</title>
     {TAILWIND_CDN}
     {FIELD_PULSE_CSS}
-    <script>
-        // Redirect to Clerk hosted page immediately
-        window.location.replace("{sign_in_url}");
-    </script>
+    <!-- Load Clerk with OAuth support -->
+    <script src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" type="module"></script>
 </head>
 <body class="bg-slate-900 min-h-screen flex items-center justify-center">
-    <div class="text-center">
-        <div class="animate-spin w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-        <p class="text-slate-400">Redirecting to sign in...</p>
-        <p class="text-slate-600 text-sm mt-2">
-            <a href="{sign_in_url}" class="text-emerald-400 hover:text-emerald-300">Click here if not redirected</a>
-        </p>
+    <div class="w-full max-w-md px-6">
+        <div class="bg-slate-800 rounded-2xl shadow-2xl p-8 fade-in">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl mx-auto mb-4 flex items-center justify-center">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <h1 class="text-2xl font-bold text-white">Sign In to FieldPulse</h1>
+                <p class="text-slate-400 mt-1">Use your Clerk account</p>
+            </div>
+
+            <div id="auth-container" class="space-y-4">
+                <button id="sign-in-btn" class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
+                    </svg>
+                    Sign In with Clerk
+                </button>
+                <button id="sign-up-btn" class="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl transition">
+                    Create Account
+                </button>
+            </div>
+
+            <div id="loading" class="hidden text-center py-8">
+                <div class="animate-spin w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p class="text-slate-400">Signing in...</p>
+            </div>
+
+            <div id="error" class="hidden mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm"></div>
+
+            <p class="text-center text-slate-600 text-xs mt-6">
+                <a href="/fieldpulse/legacy-login" class="hover:text-slate-500">Admin: Use legacy login</a>
+            </p>
+        </div>
     </div>
+
+    <script type="module">
+        const clerkPubKey = "{clerk_pub_key}";
+        const redirectUrl = "{app_domain}/fieldpulse/dashboard";
+
+        async function initAuth() {{
+            try {{
+                // Wait for Clerk to load
+                while (!window.Clerk) {{
+                    await new Promise(r => setTimeout(r, 100));
+                }}
+
+                const clerk = new Clerk(clerkPubKey);
+                await clerk.load({{
+                    redirectUrl: redirectUrl,
+                    afterSignInUrl: redirectUrl,
+                    afterSignUpUrl: "{app_domain}/fieldpulse/clerk-onboarding"
+                }});
+
+                // Check if already signed in
+                if (clerk.user) {{
+                    // Get session token and redirect
+                    const token = await clerk.session.getToken();
+                    if (token) {{
+                        localStorage.setItem('__clerk_token', token);
+                        window.location.href = redirectUrl;
+                    }}
+                    return;
+                }}
+
+                // Set up sign in button
+                document.getElementById('sign-in-btn').addEventListener('click', async () => {{
+                    document.getElementById('auth-container').classList.add('hidden');
+                    document.getElementById('loading').classList.remove('hidden');
+
+                    try {{
+                        // Open Clerk hosted page in popup
+                        await clerk.openSignIn({{
+                            redirectUrl: redirectUrl,
+                            routing: 'virtual',
+                            afterSignInUrl: redirectUrl
+                        }});
+                    }} catch (err) {{
+                        showError(err.message);
+                    }}
+                }});
+
+                // Set up sign up button
+                document.getElementById('sign-up-btn').addEventListener('click', async () => {{
+                    document.getElementById('auth-container').classList.add('hidden');
+                    document.getElementById('loading').classList.remove('hidden');
+
+                    try {{
+                        await clerk.openSignUp({{
+                            redirectUrl: "{app_domain}/fieldpulse/clerk-onboarding",
+                            routing: 'virtual'
+                        }});
+                    }} catch (err) {{
+                        showError(err.message);
+                    }}
+                }});
+
+            }} catch (err) {{
+                showError('Failed to initialize: ' + err.message);
+            }}
+        }}
+
+        function showError(msg) {{
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('auth-container').classList.remove('hidden');
+            document.getElementById('error').textContent = msg;
+            document.getElementById('error').classList.remove('hidden');
+        }}
+
+        initAuth();
+    </script>
 </body>
 </html>""")
 
