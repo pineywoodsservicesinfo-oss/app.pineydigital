@@ -106,17 +106,16 @@ def verify_clerk_jwt(token: str) -> Optional[Dict[str, Any]]:
         issuer = unverified.get("iss", "")
 
         if "clerk" in issuer.lower() or "accounts.dev" in issuer.lower():
-            # This is a Clerk token - return all claims for flexibility with custom templates
+            # This is a Clerk token - return standard claims
+            # 'sub' is automatically provided by Clerk (user ID)
             return {
-                "sub": unverified.get("sub") or unverified.get("user_id"),  # User ID
-                "email": unverified.get("email") or unverified.get("email_address"),
-                "first_name": unverified.get("first_name") or unverified.get("firstName"),
-                "last_name": unverified.get("last_name") or unverified.get("lastName"),
-                "org_id": unverified.get("org_id"),  # Organization ID (for multi-tenant)
-                "org_role": unverified.get("org_role"),  # Organization role
-                "org_slug": unverified.get("org_slug"),  # Organization slug
-                # Include raw claims for debugging and template flexibility
-                "_raw": unverified,
+                "sub": unverified.get("sub"),  # User ID (reserved claim, always present)
+                "email": unverified.get("email"),
+                "first_name": unverified.get("first_name"),
+                "last_name": unverified.get("last_name"),
+                "org_id": unverified.get("org_id"),
+                "org_role": unverified.get("org_role"),
+                "org_slug": unverified.get("org_slug"),
             }
 
     except jwt.ExpiredSignatureError:

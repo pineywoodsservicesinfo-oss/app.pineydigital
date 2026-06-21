@@ -1118,14 +1118,16 @@ def clerk_verify():
                 # Fallback to unverified for development
                 claims = jwt.decode(token, options={"verify_signature": False}, algorithms=["RS256"])
 
-        # Extract user info from claims (with fallbacks for different claim names)
-        clerk_user_id = claims.get("sub") or claims.get("user_id")
-        email = claims.get("email") or claims.get("email_address", "")
-        first_name = claims.get("first_name") or claims.get("firstName", "")
-        last_name = claims.get("last_name") or claims.get("lastName", "")
+        # Extract user info from claims
+        # Note: 'sub' is reserved by Clerk and automatically contains the user ID
+        clerk_user_id = claims.get("sub")
+        email = claims.get("email", "")
+        first_name = claims.get("first_name", "")
+        last_name = claims.get("last_name", "")
 
-        # Debug logging
+        # Debug logging - log all available claims
         logger.info(f"Clerk JWT claims: sub={clerk_user_id}, email={email}")
+        logger.info(f"Available claims: {list(claims.keys())}")
         logger.debug(f"Full claims: {claims}")
 
         if not clerk_user_id:
