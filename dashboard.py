@@ -952,7 +952,7 @@ def clerk_login_page():
 
             try {{
                 // Get JWT token from Clerk using custom template
-                const token = await clerk.session.getToken({ template: "fieldpulse-template" });
+                const token = await clerk.session.getToken({{ template: "fieldpulse-template" }});
 
                 if (!token) {{
                     throw new Error('No token received from Clerk');
@@ -961,7 +961,7 @@ def clerk_login_page():
                 console.log('Got token, verifying with backend...');
 
                 // Send token to Flask backend
-                const payload = { token: token };
+                const payload = {{ token: token }};
                 const response = await fetch(apiUrl, {{
                     method: 'POST',
                     headers: {{
