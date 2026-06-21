@@ -1392,28 +1392,94 @@ def fieldpulse_new_job():
                 </div>
             </header>
 
-            <div class="p-8 max-w-3xl">
+            <div class="p-8 max-w-2xl mx-auto">
                 {f'<div class="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400">{error}</div>' if error else ''}
 
                 <!-- Progress Steps -->
-                <div class="flex items-center gap-4 mb-8">
-                    <div class="flex items-center gap-2">
-                        <div class="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center text-sm font-medium">1</div>
-                        <span class="text-sm text-white font-medium">Job</span>
+                <div class="flex items-center justify-center gap-2 mb-8" id="progressSteps">
+                    <div class="step-indicator flex items-center gap-2" data-step="1">
+                        <div class="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center text-sm font-medium transition">1</div>
+                        <span class="text-sm text-white font-medium">Job Details</span>
                     </div>
-                    <div class="flex-1 h-px bg-slate-700"></div>
-                    <div class="flex items-center gap-2">
-                        <div class="w-8 h-8 rounded-full bg-slate-700 text-slate-400 flex items-center justify-center text-sm font-medium">2</div>
-                        <span class="text-sm text-slate-400">Customer</span>
+                    <div class="flex-1 h-px bg-slate-700 max-w-20"></div>
+                    <div class="step-indicator flex items-center gap-2" data-step="2">
+                        <div class="w-8 h-8 rounded-full bg-slate-700 text-slate-400 flex items-center justify-center text-sm font-medium transition">2</div>
+                        <span class="text-sm text-slate-400">Client Info</span>
                     </div>
-                    <div class="flex-1 h-px bg-slate-700"></div>
-                    <div class="flex items-center gap-2">
-                        <div class="w-8 h-8 rounded-full bg-slate-700 text-slate-400 flex items-center justify-center text-sm font-medium">3</div>
+                    <div class="flex-1 h-px bg-slate-700 max-w-20"></div>
+                    <div class="step-indicator flex items-center gap-2" data-step="3">
+                        <div class="w-8 h-8 rounded-full bg-slate-700 text-slate-400 flex items-center justify-center text-sm font-medium transition">3</div>
                         <span class="text-sm text-slate-400">Schedule</span>
                     </div>
                 </div>
 
-                <form method="POST" class="space-y-6" id="jobForm">
+                <form method="POST" id="jobForm" class="relative min-h-[400px]">
+                    <!-- Step 1: Job Details -->
+                    <div id="step1" class="step-content">
+                        <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                            <div class="flex items-center gap-3 mb-6">
+                                <div class="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 class="text-lg font-medium text-white">What type of job?</h3>
+                                    <p class="text-sm text-slate-400">Select a service or enter custom title</p>
+                                </div>
+                            </div>
+
+                            <!-- Quick Select Job Types -->
+                            <div class="mb-6">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <button type="button" onclick="setJobType('Lawn Mowing')" class="job-type-btn px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition text-left">
+                                        <div class="font-medium">Lawn Mowing</div>
+                                        <div class="text-xs text-slate-400">Regular maintenance</div>
+                                    </button>
+                                    <button type="button" onclick="setJobType('Hedge Trimming')" class="job-type-btn px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition text-left">
+                                        <div class="font-medium">Hedge Trimming</div>
+                                        <div class="text-xs text-slate-400">Shaping & maintenance</div>
+                                    </button>
+                                    <button type="button" onclick="setJobType('Garden Cleanup')" class="job-type-btn px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition text-left">
+                                        <div class="font-medium">Garden Cleanup</div>
+                                        <div class="text-xs text-slate-400">Seasonal cleaning</div>
+                                    </button>
+                                    <button type="button" onclick="setJobType('Mulching')" class="job-type-btn px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition text-left">
+                                        <div class="font-medium">Mulching</div>
+                                        <div class="text-xs text-slate-400">Bed preparation</div>
+                                    </button>
+                                    <button type="button" onclick="setJobType('Fertilization')" class="job-type-btn px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition text-left">
+                                        <div class="font-medium">Fertilization</div>
+                                        <div class="text-xs text-slate-400">Lawn treatment</div>
+                                    </button>
+                                    <button type="button" onclick="setJobType('Weed Control')" class="job-type-btn px-4 py-3 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition text-left">
+                                        <div class="font-medium">Weed Control</div>
+                                        <div class="text-xs text-slate-400">Chemical treatment</div>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">Job Title *</label>
+                                    <input type="text" name="title" id="jobTitle" required class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="Enter job title...">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">Description</label>
+                                    <textarea name="description" rows="3" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="Add any special instructions or details..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end mt-6">
+                            <button type="button" onclick="nextStep(2)" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition flex items-center gap-2">
+                                Next
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
                     <!-- Job Details Section -->
                     <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
                         <div class="flex items-center gap-3 mb-4">
@@ -1450,222 +1516,286 @@ def fieldpulse_new_job():
                         </div>
                     </div>
 
-                    <!-- Customer Section -->
-                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                                </svg>
+                    <!-- Step 2: Customer Information -->
+                    <div id="step2" class="step-content hidden">
+                        <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                            <div class="flex items-center gap-3 mb-6">
+                                <div class="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 class="text-lg font-medium text-white">Who is the client?</h3>
+                                    <p class="text-sm text-slate-400">Enter customer contact information</p>
+                                </div>
                             </div>
-                            <h3 class="text-lg font-medium text-white">Customer Information</h3>
+
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">Customer Name *</label>
+                                    <input type="text" name="customer_name" id="customerName" required class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="e.g., John Smith">
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-300 mb-2">Phone</label>
+                                        <input type="tel" name="customer_phone" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="(555) 123-4567">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-300 mb-2">Email</label>
+                                        <input type="email" name="customer_email" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="john@example.com">
+                                    </div>
+                                </div>
+
+                                <div class="pt-4 border-t border-slate-700">
+                                    <label class="block text-sm font-medium text-slate-300 mb-3">Service Address</label>
+                                    <input type="text" name="address" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent mb-3" placeholder="Street address">
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <input type="text" name="city" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="City">
+                                        <input type="text" name="zip_code" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="ZIP Code">
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="md:col-span-2">
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Customer Name *</label>
-                                <input type="text" name="customer_name" required class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="e.g., John Smith">
-                                <p class="text-xs text-slate-500 mt-1">Type to search existing customers</p>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Phone</label>
-                                <input type="tel" name="customer_phone" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="(555) 123-4567">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Email</label>
-                                <input type="email" name="customer_email" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="john@example.com">
-                            </div>
-                            <div class="md:col-span-2">
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Address</label>
-                                <input type="text" name="address" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="123 Main Street">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">City</label>
-                                <input type="text" name="city" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="Springfield">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">ZIP Code</label>
-                                <input type="text" name="zip_code" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="12345">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Scheduling Section -->
-                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                                </svg>
-                            </div>
-                            <h3 class="text-lg font-medium text-white">Scheduling</h3>
-                        </div>
-
-                        <!-- Date Selection -->
-                        <div class="mb-6">
-                            <label class="block text-sm font-medium text-slate-300 mb-3">Date *</label>
-                            <input type="date" name="scheduled_date" required
-                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-lg"
-                                style="color-scheme: dark;"
-                                min="{datetime.now().strftime('%Y-%m-%d')}">
-                            <p class="text-xs text-slate-500 mt-2">Select a date from the calendar</p>
-                        </div>
-
-                        <!-- Time Selection -->
-                        <div class="mb-6">
-                            <label class="block text-sm font-medium text-slate-300 mb-3">Time</label>
-                            <div class="grid grid-cols-4 gap-2">
-                                <label class="cursor-pointer">
-                                    <input type="radio" name="scheduled_time" value="08:00" class="peer sr-only">
-                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
-                                        8:00 AM
-                                    </div>
-                                </label>
-                                <label class="cursor-pointer">
-                                    <input type="radio" name="scheduled_time" value="09:00" class="peer sr-only" checked>
-                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
-                                        9:00 AM
-                                    </div>
-                                </label>
-                                <label class="cursor-pointer">
-                                    <input type="radio" name="scheduled_time" value="10:00" class="peer sr-only">
-                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
-                                        10:00 AM
-                                    </div>
-                                </label>
-                                <label class="cursor-pointer">
-                                    <input type="radio" name="scheduled_time" value="11:00" class="peer sr-only">
-                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
-                                        11:00 AM
-                                    </div>
-                                </label>
-                                <label class="cursor-pointer">
-                                    <input type="radio" name="scheduled_time" value="12:00" class="peer sr-only">
-                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
-                                        12:00 PM
-                                    </div>
-                                </label>
-                                <label class="cursor-pointer">
-                                    <input type="radio" name="scheduled_time" value="13:00" class="peer sr-only">
-                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
-                                        1:00 PM
-                                    </div>
-                                </label>
-                                <label class="cursor-pointer">
-                                    <input type="radio" name="scheduled_time" value="14:00" class="peer sr-only">
-                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
-                                        2:00 PM
-                                    </div>
-                                </label>
-                                <label class="cursor-pointer">
-                                    <input type="radio" name="scheduled_time" value="15:00" class="peer sr-only">
-                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
-                                        3:00 PM
-                                    </div>
-                                </label>
-                                <label class="cursor-pointer">
-                                    <input type="radio" name="scheduled_time" value="16:00" class="peer sr-only">
-                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
-                                        4:00 PM
-                                    </div>
-                                </label>
-                                <label class="cursor-pointer">
-                                    <input type="radio" name="scheduled_time" value="17:00" class="peer sr-only">
-                                    <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
-                                        5:00 PM
-                                    </div>
-                                </label>
-                            </div>
-                            <p class="text-xs text-slate-500 mt-2">9:00 AM selected by default</p>
-                        </div>
-
-                        <!-- Duration & Crew -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Est. Duration</label>
-                                <select name="estimated_duration" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
-                                    <option value="30">30 minutes</option>
-                                    <option value="60" selected>1 hour</option>
-                                    <option value="90">1.5 hours</option>
-                                    <option value="120">2 hours</option>
-                                    <option value="180">3 hours</option>
-                                    <option value="240">4 hours</option>
-                                    <option value="480">Full day (8 hours)</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Crew</label>
-                                <select name="crew_id" class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">{crew_options}</select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Sticky Action Bar -->
-                    <div class="sticky bottom-6 bg-slate-800/95 backdrop-blur rounded-xl p-4 border border-slate-700 shadow-lg">
-                        <div class="flex items-center justify-between">
-                            <a href="/fieldpulse/jobs" class="text-slate-400 hover:text-white transition flex items-center gap-2">
+                        <div class="flex justify-between mt-6">
+                            <button type="button" onclick="prevStep(1)" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition flex items-center gap-2">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                                 </svg>
-                                Cancel
-                            </a>
-                            <div class="flex gap-3">
-                                <button type="button" onclick="saveDraft()" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2.5 rounded-lg font-medium transition flex items-center gap-2">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+                                Back
+                            </button>
+                            <button type="button" onclick="nextStep(3)" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition flex items-center gap-2">
+                                Next
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Scheduling -->
+                    <div id="step3" class="step-content hidden">
+                        <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                            <div class="flex items-center gap-3 mb-6">
+                                <div class="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                                     </svg>
-                                    Save Draft
-                                </button>
-                                <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-lg font-medium transition flex items-center gap-2">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                                    </svg>
-                                    Create Job
-                                </button>
+                                </div>
+                                <div>
+                                    <h3 class="text-lg font-medium text-white">When should we schedule?</h3>
+                                    <p class="text-sm text-slate-400">Select date, time, and assign crew</p>
+                                </div>
                             </div>
+
+                            <!-- Date Selection -->
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-slate-300 mb-3">Date *</label>
+                                <input type="date" name="scheduled_date" id="scheduledDate" required
+                                    class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-lg"
+                                    style="color-scheme: dark;"
+                                    min="{datetime.now().strftime('%Y-%m-%d')}">
+                            </div>
+
+                            <!-- Time Selection -->
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-slate-300 mb-3">Time</label>
+                                <div class="grid grid-cols-4 gap-2">
+                                    <label class="cursor-pointer">
+                                        <input type="radio" name="scheduled_time" value="08:00" class="peer sr-only">
+                                        <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                            8:00 AM
+                                        </div>
+                                    </label>
+                                    <label class="cursor-pointer">
+                                        <input type="radio" name="scheduled_time" value="09:00" class="peer sr-only" checked>
+                                        <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                            9:00 AM
+                                        </div>
+                                    </label>
+                                    <label class="cursor-pointer">
+                                        <input type="radio" name="scheduled_time" value="10:00" class="peer sr-only">
+                                        <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                            10:00 AM
+                                        </div>
+                                    </label>
+                                    <label class="cursor-pointer">
+                                        <input type="radio" name="scheduled_time" value="11:00" class="peer sr-only">
+                                        <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                            11:00 AM
+                                        </div>
+                                    </label>
+                                    <label class="cursor-pointer">
+                                        <input type="radio" name="scheduled_time" value="12:00" class="peer sr-only">
+                                        <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                            12:00 PM
+                                        </div>
+                                    </label>
+                                    <label class="cursor-pointer">
+                                        <input type="radio" name="scheduled_time" value="13:00" class="peer sr-only">
+                                        <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                            1:00 PM
+                                        </div>
+                                    </label>
+                                    <label class="cursor-pointer">
+                                        <input type="radio" name="scheduled_time" value="14:00" class="peer sr-only">
+                                        <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                            2:00 PM
+                                        </div>
+                                    </label>
+                                    <label class="cursor-pointer">
+                                        <input type="radio" name="scheduled_time" value="15:00" class="peer sr-only">
+                                        <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                            3:00 PM
+                                        </div>
+                                    </label>
+                                    <label class="cursor-pointer">
+                                        <input type="radio" name="scheduled_time" value="16:00" class="peer sr-only">
+                                        <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                            4:00 PM
+                                        </div>
+                                    </label>
+                                    <label class="cursor-pointer">
+                                        <input type="radio" name="scheduled_time" value="17:00" class="peer sr-only">
+                                        <div class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-sm text-slate-300 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 peer-checked:text-white hover:border-slate-500 transition">
+                                            5:00 PM
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Duration & Crew -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">Est. Duration</label>
+                                    <select name="estimated_duration" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                        <option value="30">30 minutes</option>
+                                        <option value="60" selected>1 hour</option>
+                                        <option value="90">1.5 hours</option>
+                                        <option value="120">2 hours</option>
+                                        <option value="180">3 hours</option>
+                                        <option value="240">4 hours</option>
+                                        <option value="480">Full day (8 hours)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">Assign Crew</label>
+                                    <select name="crew_id" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">{crew_options}</select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between mt-6">
+                            <button type="button" onclick="prevStep(2)" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition flex items-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                                </svg>
+                                Back
+                            </button>
+                            <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-8 py-3 rounded-lg font-medium transition flex items-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                Finish & Create Job
+                            </button>
                         </div>
                     </div>
                 </form>
 
+                <!-- Toast Notification -->
+                <div id="toast" class="fixed bottom-6 right-6 bg-emerald-500 text-white px-6 py-4 rounded-xl shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center gap-3 z-50">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    <span id="toastMessage">Job created successfully!</span>
+                </div>
+
                 <script>
+                    // Step navigation
+                    function showStep(stepNum) {{
+                        // Hide all steps
+                        document.querySelectorAll('.step-content').forEach(function(el) {{
+                            el.classList.add('hidden');
+                        }});
+
+                        // Show current step
+                        document.getElementById('step' + stepNum).classList.remove('hidden');
+
+                        // Update progress indicators
+                        document.querySelectorAll('.step-indicator').forEach(function(el) {{
+                            var step = el.getAttribute('data-step');
+                            var circle = el.querySelector('div');
+                            var label = el.querySelector('span');
+
+                            if (step == stepNum) {{
+                                circle.className = 'w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center text-sm font-medium transition';
+                                label.className = 'text-sm text-white font-medium';
+                            }} else if (step < stepNum) {{
+                                circle.className = 'w-8 h-8 rounded-full bg-emerald-500/50 text-white flex items-center justify-center text-sm font-medium transition';
+                                label.className = 'text-sm text-slate-400';
+                            }} else {{
+                                circle.className = 'w-8 h-8 rounded-full bg-slate-700 text-slate-400 flex items-center justify-center text-sm font-medium transition';
+                                label.className = 'text-sm text-slate-400';
+                            }}
+                        }});
+                    }}
+
+                    function nextStep(step) {{
+                        // Validation
+                        if (step === 2) {{
+                            var title = document.getElementById('jobTitle').value.trim();
+                            if (!title) {{
+                                showToast('Please enter a job title', 'error');
+                                document.getElementById('jobTitle').focus();
+                                return;
+                            }}
+                        }}
+                        if (step === 3) {{
+                            var customer = document.getElementById('customerName').value.trim();
+                            if (!customer) {{
+                                showToast('Please enter customer name', 'error');
+                                document.getElementById('customerName').focus();
+                                return;
+                            }}
+                        }}
+                        showStep(step);
+                    }}
+
+                    function prevStep(step) {{
+                        showStep(step);
+                    }}
+
+                    // Toast notification
+                    function showToast(message, type) {{
+                        var toast = document.getElementById('toast');
+                        var toastMessage = document.getElementById('toastMessage');
+                        toastMessage.textContent = message;
+
+                        if (type === 'error') {{
+                            toast.className = 'fixed bottom-6 right-6 bg-red-500 text-white px-6 py-4 rounded-xl shadow-lg transform translate-y-0 opacity-100 transition-all duration-300 flex items-center gap-3 z-50';
+                        }} else {{
+                            toast.className = 'fixed bottom-6 right-6 bg-emerald-500 text-white px-6 py-4 rounded-xl shadow-lg transform translate-y-0 opacity-100 transition-all duration-300 flex items-center gap-3 z-50';
+                        }}
+
+                        setTimeout(function() {{
+                            toast.classList.add('translate-y-20', 'opacity-0');
+                        }}, 3000);
+                    }}
+
                     // Set job type helper
                     function setJobType(title) {{
                         document.getElementById('jobTitle').value = title;
-                        // Add a subtle flash effect
-                        document.getElementById('jobTitle').classList.add('ring-2', 'ring-emerald-500');
+                        // Highlight the button briefly
+                        event.target.closest('button').classList.add('ring-2', 'ring-emerald-400');
                         setTimeout(function() {{
-                            document.getElementById('jobTitle').classList.remove('ring-2', 'ring-emerald-500');
+                            event.target.closest('button').classList.remove('ring-2', 'ring-emerald-400');
                         }}, 300);
                     }}
 
-                    // Save draft function
-                    function saveDraft() {{
-                        // Store form data in localStorage
-                        const form = document.getElementById('jobForm');
-                        const formData = new FormData(form);
-                        const data = Object.fromEntries(formData);
-                        localStorage.setItem('jobDraft', JSON.stringify(data));
-                        alert('Draft saved! You can return to this later.');
-                    }}
-
-                    // Load draft on page load
-                    window.addEventListener('load', function() {{
-                        const draft = localStorage.getItem('jobDraft');
-                        if (draft) {{
-                            const data = JSON.parse(draft);
-                            Object.keys(data).forEach(function(key) {{
-                                const input = document.querySelector('[name="' + key + '"]');
-                                if (input && !input.value) {{
-                                    input.value = data[key];
-                                }}
-                            }});
-                        }}
-                    }});
-
-                    // Clear draft on successful submit
-                    document.getElementById('jobForm').addEventListener('submit', function() {{
-                        localStorage.removeItem('jobDraft');
-                    }});
+                    // Initialize first step
+                    showStep(1);
                 </script>
             </div>
         </main>
@@ -1674,7 +1804,7 @@ def fieldpulse_new_job():
 </html>''')
 
 
-# Job Detail Route - to be appended to dashboard.py
+# Job Detail Route
 
 @app.route("/fieldpulse/jobs/<job_id>", methods=["GET", "POST"])
 @fp_login_required
