@@ -646,14 +646,29 @@ def clerk_login_page():
         # Clerk not configured - redirect to legacy login
         return redirect(url_for("fieldpulse_legacy_login"))
 
-    # Extract the instance domain from publishable key
-    # pk_test_xxx -> https://xxx.clerk.accounts.dev
-    key_part = clerk_pub_key.replace("pk_test_", "").replace("pk_live_", "")
-    # Remove any trailing characters after the base64 part (if any)
-    key_base = key_part.split('.')[0] if '.' in key_part else key_part
+    # Extract the instance domain from publishable key (base64 encoded after pk_test_)
+    import base64
+    if clerk_pub_key.startswith("pk_test_"):
+        encoded = clerk_pub_key[8:]  # Remove 'pk_test_'
+    elif clerk_pub_key.startswith("pk_live_"):
+        encoded = clerk_pub_key[8:]  # Remove 'pk_live_'
+    else:
+        encoded = clerk_pub_key
 
-    # Build the Clerk hosted sign-in URL
-    clerk_domain = f"https://{key_base}.clerk.accounts.dev"
+    # Add padding if needed
+    padding = 4 - len(encoded) % 4
+    if padding != 4:
+        encoded += '=' * padding
+
+    try:
+        domain = base64.b64decode(encoded).decode('utf-8').rstrip('\x00$')
+        clerk_domain = f"https://{domain}"
+    except:
+        # Fallback to constructing domain
+        key_part = clerk_pub_key.replace("pk_test_", "").replace("pk_live_", "")
+        key_base = key_part.split('.')[0] if '.' in key_part else key_part
+        clerk_domain = f"https://{key_base}.clerk.accounts.dev"
+
     sign_in_url = f"{clerk_domain}/sign-in?redirect_url=/fieldpulse/dashboard"
 
     return redirect(sign_in_url)
@@ -667,9 +682,28 @@ def clerk_signup_page():
     if not clerk_pub_key:
         return redirect(url_for("fieldpulse_legacy_login"))
 
-    # Extract the instance domain from publishable key
-    key_part = clerk_pub_key.replace("pk_test_", "").replace("pk_live_", "")
-    key_base = key_part.split('.')[0] if '.' in key_part else key_part
+    # Extract the instance domain from publishable key (base64 encoded after pk_test_)
+    import base64
+    if clerk_pub_key.startswith("pk_test_"):
+        encoded = clerk_pub_key[8:]  # Remove 'pk_test_'
+    elif clerk_pub_key.startswith("pk_live_"):
+        encoded = clerk_pub_key[8:]  # Remove 'pk_live_'
+    else:
+        encoded = clerk_pub_key
+
+    # Add padding if needed
+    padding = 4 - len(encoded) % 4
+    if padding != 4:
+        encoded += '=' * padding
+
+    try:
+        domain = base64.b64decode(encoded).decode('utf-8').rstrip('\x00$')
+        clerk_domain = f"https://{domain}"
+    except:
+        # Fallback to constructing domain
+        key_part = clerk_pub_key.replace("pk_test_", "").replace("pk_live_", "")
+        key_base = key_part.split('.')[0] if '.' in key_part else key_part
+        clerk_domain = f"https://{key_base}.clerk.accounts.dev"
 
     # Build the Clerk hosted sign-up URL
     clerk_domain = f"https://{key_base}.clerk.accounts.dev"
