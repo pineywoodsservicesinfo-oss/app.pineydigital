@@ -341,12 +341,21 @@ def get_business_from_session():
     """Get current business from session."""
     business_id = session.get("fp_business_id")
     if not business_id:
+        logger.warning("get_business_from_session: No fp_business_id in session")
         return None
-    return query_db(
+
+    business = query_db(
         "SELECT * FROM businesses WHERE id = %s",
         (business_id,),
         one=True
     )
+
+    if not business:
+        logger.error(f"get_business_from_session: Business {business_id} not found in database")
+    else:
+        logger.info(f"get_business_from_session: Found business {business_id}")
+
+    return business
 
 
 def get_jobs_for_business(business_id, status=None, limit=10):
@@ -1430,6 +1439,7 @@ def api_create_business():
         user_id = str(uuid.uuid4())
 
         # Create business
+        logger.info(f"Creating business: {business_name} (ID: {business_id})")
         query_db("""
             INSERT INTO businesses (id, name, slug, phone, plan, active, created_at)
             VALUES (%s, %s, %s, %s, 'starter', true, NOW())
@@ -1437,6 +1447,7 @@ def api_create_business():
 
         # Create user with Clerk info (CRITICAL: store clerk_user_id and real email)
         user_email = clerk_email if clerk_email else f"user_{user_id[:8]}@fieldpulse.local"
+        logger.info(f"Creating user: {user_name} (ID: {user_id}, email: {user_email}, clerk_id: {clerk_user_id})")
         query_db("""
             INSERT INTO users (id, business_id, clerk_user_id, email, password_hash, name, role, active)
             VALUES (%s, %s, %s, %s, 'clerk_auth', %s, 'owner', true)
@@ -1448,10 +1459,13 @@ def api_create_business():
         session["fp_business_id"] = business_id
         session["fp_user_name"] = user_name
 
+        logger.info(f"Session set: user_id={user_id}, business_id={business_id}")
+
         # Clear temporary Clerk session data
         session.pop('clerk_user_id', None)
         session.pop('clerk_email', None)
 
+        logger.info("Redirecting to /dashboard")
         return redirect("/dashboard")
 
     except Exception as e:
