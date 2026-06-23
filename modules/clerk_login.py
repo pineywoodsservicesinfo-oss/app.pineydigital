@@ -58,11 +58,56 @@ CLERK_LOGIN_TEMPLATE = """
         </div>
     </div>
 
-    <!-- Load Clerk UI bundle FIRST (required for modal functionality) -->
-    <script src="https://cdn.jsdelivr.net/npm/@clerk/ui@latest/dist/ui.browser.js" crossorigin="anonymous"></script>
+    <script>
+        // Derive Clerk Frontend API domain from publishable key
+        // pk_test_xxx -> https://xxx.clerk.accounts.dev
+        (function() {{
+            const pubKey = "{clerk_pub_key}";
+            let domain = 'frontend-api.clerk.dev';  // fallback
 
-    <!-- Load Clerk JS SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" crossorigin="anonymous"></script>
+            if (pubKey && pubKey.includes('_')) {{
+                try {{
+                    const encoded = pubKey.split('_').pop();
+                    if (encoded) {{
+                        // Add padding if needed
+                        let padded = encoded;
+                        while (padded.length % 4 !== 0) padded += '=';
+                        const decoded = atob(padded);
+                        // Remove null bytes and trailing $
+                        const clean = decoded.replace(/\\x00/g, '').replace(/\\$/g, '');
+                        if (clean && clean.includes('.')) {{
+                            domain = clean;
+                        }}
+                    }}
+                }} catch (e) {{
+                    console.error('[Clerk] Failed to decode domain:', e);
+                }}
+            }}
+
+            // Store for later use
+            window.__CLERK_DOMAIN = domain;
+
+            // Load scripts dynamically
+            const loadScript = (src) => {{
+                return new Promise((resolve, reject) => {{
+                    const script = document.createElement('script');
+                    script.src = src;
+                    script.crossOrigin = 'anonymous';
+                    script.async = false;  // Load in order
+                    script.onload = resolve;
+                    script.onerror = () => reject(new Error('Failed to load: ' + src));
+                    document.head.appendChild(script);
+                }});
+            }};
+
+            // Load UI bundle first, then clerk-js
+            window.__CLERK_LOADER = Promise.resolve()
+                .then(() => loadScript(`https://${{domain}}/npm/@clerk/ui@latest/dist/ui.browser.js`))
+                .then(() => loadScript(`https://${{domain}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`))
+                .then(() => console.log('[Clerk] Scripts loaded from', domain))
+                .catch(err => console.error('[Clerk] Script loading failed:', err));
+        }})();
+    </script>
 
     <script>
         // Configuration
@@ -83,9 +128,16 @@ CLERK_LOGIN_TEMPLATE = """
             try {{
                 console.log('[Clerk] Initializing...');
 
+                // Wait for scripts to load (they were loaded dynamically above)
+                if (window.__CLERK_LOADER) {{
+                    console.log('[Clerk] Waiting for scripts to load...');
+                    await window.__CLERK_LOADER;
+                    await new Promise(resolve => setTimeout(resolve, 100));  // Small delay for script execution
+                }}
+
                 // Check if Clerk loaded
                 if (typeof Clerk === 'undefined') {{
-                    throw new Error('Clerk SDK not loaded. Check CDN URLs.');
+                    throw new Error('Clerk SDK not loaded. Check CDN URLs. Domain: ' + (window.__CLERK_DOMAIN || 'unknown'));
                 }}
 
                 // Check if UI bundle loaded (required for modals)
