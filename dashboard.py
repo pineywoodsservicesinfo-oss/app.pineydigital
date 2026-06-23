@@ -721,11 +721,6 @@ def fieldpulse_legacy_login():
 @app.route("/clerk-login")
 def clerk_login_page():
     """Clerk authentication - uses JWT token pattern with modal sign-in."""
-    # TEMPORARY: Disable Clerk until fully debugged
-    return redirect(url_for("fieldpulse_legacy_login"))
-
-    # TODO: Re-enable Clerk once JWT template issues are resolved
-    # See memory: Clerk debugging paused 2026-06-21
     try:
         clerk_pub_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
 
@@ -738,248 +733,20 @@ def clerk_login_page():
         app_domain = os.environ.get("APP_DOMAIN", request.host_url.rstrip('/'))
         logger.info(f"App domain: {app_domain}")
 
-        return render_template_string(f"""
-<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FieldPulse — Sign In</title>
-    {TAILWIND_CDN}
-    {FIELD_PULSE_CSS}
-</head>
-<body class="bg-slate-900 min-h-screen flex items-center justify-center">
-    <div class="w-full max-w-md px-6">
-        <div class="bg-slate-800 rounded-2xl shadow-2xl p-8 fade-in">
-            <div class="text-center mb-8">
-                <div class="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl mx-auto mb-4 flex items-center justify-center">
-                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                    </svg>
-                </div>
-                <h1 class="text-2xl font-bold text-white">Sign In to FieldPulse</h1>
-                <p class="text-slate-400 mt-1">Secure authentication powered by Clerk</p>
-            </div>
+        # Use the fixed Clerk login template that properly loads UI components
+        from modules.clerk_login import render_clerk_login_page
 
-            <div id="auth-container" class="space-y-4">
-                <button id="sign-in-btn" class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition flex items-center justify-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
-                    </svg>
-                    Sign In
-                </button>
-                <button id="sign-up-btn" class="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl transition">
-                    Create Account
-                </button>
-            </div>
-
-            <div id="loading" class="hidden text-center py-8">
-                <div class="animate-spin w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-                <p class="text-slate-400">Authenticating...</p>
-            </div>
-
-            <div id="error" class="hidden mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm"></div>
-
-            <p class="text-center text-slate-600 text-xs mt-6">
-                <a href="/legacy-login" class="hover:text-slate-500">Admin: Use legacy login</a>
-            </p>
-        </div>
-    </div>
-
-    <!-- Load Clerk JS SDK -->
-    <script type="module">
-        import {{ Clerk }} from 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js';
-
-        const clerkPubKey = "{clerk_pub_key}";
-        const apiUrl = "{app_domain}/api/clerk-verify";
-        const dashboardUrl = "{app_domain}/dashboard";
-        const onboardingUrl = "{app_domain}/clerk-onboarding";
-
-        async function initAuth() {{
-            console.log('Initializing Clerk auth...');
-
-            try {{
-                const clerk = new Clerk(clerkPubKey);
-
-                await clerk.load({{
-                    routing: 'virtual',
-                    appearance: {{
-                        variables: {{
-                            colorPrimary: '#10b981',
-                            colorBackground: '#1e293b',
-                            colorText: '#ffffff',
-                            colorTextSecondary: '#94a3b8',
-                            colorInputBackground: '#0f172a',
-                            colorInputBorder: '#334155',
-                            borderRadius: '0.75rem',
-                        }}
-                    }}
-                }});
-
-                console.log('Clerk loaded successfully');
-
-                // Check if already signed in
-                if (clerk.user) {{
-                    console.log('User already signed in:', clerk.user);
-                    await handleAuthenticatedUser(clerk);
-                    return;
-                }}
-
-                // Enable buttons
-                const signInBtn = document.getElementById('sign-in-btn');
-                const signUpBtn = document.getElementById('sign-up-btn');
-
-                if (!signInBtn || !signUpBtn) {{
-                    console.error('Buttons not found in DOM');
-                    return;
-                }}
-
-                signInBtn.addEventListener('click', (e) => {{
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('Sign in button clicked');
-                    openClerkModal(clerk, 'signIn');
-                }});
-
-                signUpBtn.addEventListener('click', (e) => {{
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('Sign up button clicked');
-                    openClerkModal(clerk, 'signUp');
-                }});
-
-                console.log('Event listeners attached to buttons');
-
-                // Listen for auth state changes
-                clerk.addListener(async (ev) => {{
-                    console.log('Auth state changed:', ev);
-                    if (ev.user && ev.session) {{
-                        await handleAuthenticatedUser(clerk);
-                    }}
-                }});
-
-            }} catch (err) {{
-                showError('Failed to initialize: ' + err.message);
-                console.error('Clerk init error:', err);
-            }}
-        }}
-
-        function openClerkModal(clerk, mode) {{
-            console.log('Opening Clerk modal:', mode);
-
-            // Use Clerk's openSignIn/openSignUp methods instead of mount
-            // These work without UI components loaded
-            try {{
-                if (mode === 'signIn') {{
-                    clerk.openSignIn({{
-                        routing: 'virtual',
-                        redirectUrl: dashboardUrl,
-                        afterSignInUrl: dashboardUrl,
-                        appearance: {{
-                            variables: {{
-                                colorPrimary: '#10b981',
-                                colorBackground: '#1e293b',
-                                colorText: '#ffffff',
-                                colorTextSecondary: '#94a3b8',
-                                colorInputBackground: '#0f172a',
-                                colorInputBorder: '#334155',
-                                borderRadius: '0.75rem',
-                            }}
-                        }}
-                    }});
-                }} else {{
-                    clerk.openSignUp({{
-                        routing: 'virtual',
-                        redirectUrl: onboardingUrl,
-                        afterSignUpUrl: onboardingUrl,
-                        appearance: {{
-                            variables: {{
-                                colorPrimary: '#10b981',
-                                colorBackground: '#1e293b',
-                                colorText: '#ffffff',
-                                colorTextSecondary: '#94a3b8',
-                                colorInputBackground: '#0f172a',
-                                colorInputBorder: '#334155',
-                                borderRadius: '0.75rem',
-                            }}
-                        }}
-                    }});
-                }}
-                console.log('Clerk modal opened');
-            }} catch (err) {{
-                console.error('Failed to open Clerk modal:', err);
-                showError('Failed to open sign-in: ' + err.message);
-            }}
-        }}
-
-        async function handleAuthenticatedUser(clerk) {{
-            document.getElementById('auth-container').classList.add('hidden');
-            document.getElementById('loading').classList.remove('hidden');
-
-            try {{
-                // Get JWT token from Clerk using custom template
-                const token = await clerk.session.getToken({{ template: "fieldpulse-template" }});
-
-                if (!token) {{
-                    throw new Error('No token received from Clerk');
-                }}
-
-                console.log('Got token, verifying with backend...');
-
-                // Send token to Flask backend
-                const payload = {{ token: token }};
-                const response = await fetch(apiUrl, {{
-                    method: 'POST',
-                    headers: {{
-                        'Content-Type': 'application/json',
-                    }},
-                    body: JSON.stringify(payload)
-                }});
-
-                const data = await response.json();
-                console.log('Verify response:', response.status, data);
-
-                if (response.ok && data.success) {{
-                    console.log('Auth successful:', data);
-                    // Redirect to dashboard or onboarding for new users
-                    const redirectTo = data.redirect || dashboardUrl;
-                    window.location.href = redirectTo;
-                }} else {{
-                    const statusMsg = data.error || 'Authentication failed (HTTP ' + response.status + ')';
-                    throw new Error(statusMsg);
-                }}
-
-            }} catch (err) {{
-                showError(err.message);
-                document.getElementById('loading').classList.add('hidden');
-                document.getElementById('auth-container').classList.remove('hidden');
-            }}
-        }}
-
-        function showError(msg) {{
-            console.error('Auth error:', msg);
-            const errorDiv = document.getElementById('error');
-            errorDiv.textContent = msg;
-            errorDiv.classList.remove('hidden');
-            // Also show as alert for visibility during debugging
-            alert('Login Error: ' + msg);
-        }}
-
-        // Initialize when DOM is ready
-        if (document.readyState === 'loading') {{
-            document.addEventListener('DOMContentLoaded', initAuth);
-        }} else {{
-            initAuth();
-        }}
-    </script>
-</body>
-</html>""")
+        return render_clerk_login_page(
+            clerk_pub_key=clerk_pub_key,
+            app_domain=app_domain,
+            tailwind_cdn=TAILWIND_CDN,
+            custom_css=FIELD_PULSE_CSS
+        )
     except Exception as e:
         logger.error(f"Error in clerk_login_page: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        return f"""<!DOCTYPE html>
-<html><body><h1>Server Error</h1><p>Error: {str(e)}</p><pre>{traceback.format_exc()}</pre></body></html>""", 500
+        return redirect(url_for("fieldpulse_legacy_login"))
 
 
 @app.route("/clerk-signup")
