@@ -276,10 +276,16 @@ def fp_login_required(f):
 
                             return f(*args, **kwargs)
 
-            # No valid Clerk token - redirect to Clerk login
-            return redirect(url_for("clerk_login_page"))
+            # No valid Clerk token - check if we have legacy session auth
+            # (User might have logged in via onboarding and have a session)
+            if session.get("fp_logged_in"):
+                # User has valid session, continue to fallback section below
+                pass
+            else:
+                # No Clerk token AND no session - redirect to Clerk login
+                return redirect(url_for("clerk_login_page"))
 
-        # Fallback to legacy session auth
+        # Fallback to legacy session auth (Clerk not configured or no Clerk token but has session)
         if not session.get("fp_logged_in"):
             return redirect(url_for("fieldpulse_login"))
 
