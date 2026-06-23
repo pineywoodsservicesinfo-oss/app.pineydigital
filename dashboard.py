@@ -1405,8 +1405,20 @@ def api_create_business():
     if not business_name or not user_name:
         return jsonify({"error": "Business name and user name are required"}), 400
 
-    # For Clerk users, we'd get the user ID from the JWT
-    # For now, create with placeholder - can be linked later
+    # Get Clerk user info from session (set during Clerk callback)
+    clerk_user_id = session.get('clerk_user_id')
+    clerk_email = session.get('clerk_email')
+
+    # If not in session, try to get from JWT token in request
+    if not clerk_user_id and CLERK_AVAILABLE and is_clerk_configured():
+        from modules.clerk_auth import get_auth_token_from_request, verify_clerk_jwt
+        token = get_auth_token_from_request()
+        if token:
+            claims = verify_clerk_jwt(token)
+            if claims:
+                clerk_user_id = claims.get('sub')
+                clerk_email = claims.get('email', '')
+
     try:
         business_id = str(uuid.uuid4())
         user_id = str(uuid.uuid4())
@@ -1417,17 +1429,22 @@ def api_create_business():
             VALUES (%s, %s, %s, %s, 'starter', true, NOW())
         """, (business_id, business_name, business_name.lower().replace(" ", "-"), phone))
 
-        # Create user (will be linked to Clerk later)
+        # Create user with Clerk info (CRITICAL: store clerk_user_id and real email)
+        user_email = clerk_email if clerk_email else f"user_{user_id[:8]}@fieldpulse.local"
         query_db("""
-            INSERT INTO users (id, business_id, email, password_hash, name, role, active)
-            VALUES (%s, %s, 'pending@fieldpulse.local', 'clerk_pending', %s, 'owner', true)
-        """, (user_id, business_id, user_name))
+            INSERT INTO users (id, business_id, clerk_user_id, email, password_hash, name, role, active)
+            VALUES (%s, %s, %s, %s, 'clerk_auth', %s, 'owner', true)
+        """, (user_id, business_id, clerk_user_id, user_email, user_name))
 
-        # Set session for legacy auth (will transition to Clerk tokens)
+        # Set session for legacy auth
         session["fp_logged_in"] = True
         session["fp_user_id"] = user_id
         session["fp_business_id"] = business_id
         session["fp_user_name"] = user_name
+
+        # Clear temporary Clerk session data
+        session.pop('clerk_user_id', None)
+        session.pop('clerk_email', None)
 
         return redirect("/dashboard")
 
