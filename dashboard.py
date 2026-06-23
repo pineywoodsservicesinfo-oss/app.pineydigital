@@ -147,7 +147,7 @@ def seed_fieldpulse_demo():
     except Exception as e:
         logger.error(f"Failed to seed demo data: {e}")
 
-seed_fieldpulse_demo()
+# seed_fieldpulse_demo() - MOVED to after query_db is defined
 
 # Register blueprints
 from modules.reviews_routes import reviews_bp
@@ -219,6 +219,10 @@ def query_db(sql, params=(), one=False):
     except Exception as e:
         logger.error(f"Database query error: {e}")
         return None if one else []
+
+
+# Now that query_db is defined, seed demo data
+seed_fieldpulse_demo()
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -1438,19 +1442,22 @@ def api_create_business():
         business_id = str(uuid.uuid4())
         user_id = str(uuid.uuid4())
 
-        # Create business
-        logger.info(f"Creating business: {business_name} (ID: {business_id})")
+        # Create business with unique slug
+        import uuid
+        slug = business_name.lower().replace(" ", "-")[:50] + "-" + str(uuid.uuid4())[:8]
+        logger.info(f"Creating business: {business_name} (ID: {business_id}, slug: {slug})")
         query_db("""
             INSERT INTO businesses (id, name, slug, phone, plan, active, created_at)
             VALUES (%s, %s, %s, %s, 'starter', true, NOW())
-        """, (business_id, business_name, business_name.lower().replace(" ", "-"), phone))
+        """, (business_id, business_name, slug, phone))
 
         # Create user with Clerk info (CRITICAL: store clerk_user_id and real email)
+        # Note: users table doesn't have 'active' column - schema mismatch
         user_email = clerk_email if clerk_email else f"user_{user_id[:8]}@fieldpulse.local"
         logger.info(f"Creating user: {user_name} (ID: {user_id}, email: {user_email}, clerk_id: {clerk_user_id})")
         query_db("""
-            INSERT INTO users (id, business_id, clerk_user_id, email, password_hash, name, role, active)
-            VALUES (%s, %s, %s, %s, 'clerk_auth', %s, 'owner', true)
+            INSERT INTO users (id, business_id, clerk_user_id, email, password_hash, name, role)
+            VALUES (%s, %s, %s, %s, 'clerk_auth', %s, 'owner')
         """, (user_id, business_id, clerk_user_id, user_email, user_name))
 
         # Set session for legacy auth

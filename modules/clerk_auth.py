@@ -56,7 +56,9 @@ def get_clerk_jwks() -> Optional[Dict]:
 
         domain = base64.b64decode(encoded).decode("utf-8")
         domain = domain.replace("\x00", "").rstrip("$")
-        domain = domain.replace(".clerk.accounts.dev", ".accounts.dev")
+        # Ensure .clerk.accounts.dev format
+        if ".accounts.dev" in domain and ".clerk.accounts.dev" not in domain:
+            domain = domain.replace(".accounts.dev", ".clerk.accounts.dev")
         clerk_issuer = f"https://{domain}"
 
         # Clerk JWKS endpoint
