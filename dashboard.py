@@ -17,6 +17,7 @@ Features:
 import os
 import sys
 import json
+import uuid
 import sqlite3
 import logging
 from datetime import datetime, timedelta
@@ -887,7 +888,7 @@ def clerk_verify():
         if user:
             # Existing user - update Clerk ID if needed
             if not user.get("clerk_user_id"):
-                execute_db(
+                query_db(
                     "UPDATE users SET clerk_user_id = %s WHERE id = %s",
                     (clerk_user_id, user["id"])
                 )
@@ -1394,6 +1395,8 @@ def fieldpulse_logout():
 @app.route("/api/create-business", methods=["POST"])
 def api_create_business():
     """Create business profile for new Clerk user."""
+    import uuid
+
     # This should be called after Clerk authentication
     business_name = request.form.get("business_name", "").strip()
     user_name = request.form.get("user_name", "").strip()
@@ -1409,13 +1412,13 @@ def api_create_business():
         user_id = str(uuid.uuid4())
 
         # Create business
-        execute_db("""
+        query_db("""
             INSERT INTO businesses (id, name, slug, phone, plan, active, created_at)
             VALUES (%s, %s, %s, %s, 'starter', true, NOW())
         """, (business_id, business_name, business_name.lower().replace(" ", "-"), phone))
 
         # Create user (will be linked to Clerk later)
-        execute_db("""
+        query_db("""
             INSERT INTO users (id, business_id, email, password_hash, name, role, active)
             VALUES (%s, %s, 'pending@fieldpulse.local', 'clerk_pending', %s, 'owner', true)
         """, (user_id, business_id, user_name))
@@ -1475,7 +1478,7 @@ def clerk_webhook():
 
             if existing:
                 # Update with Clerk ID
-                execute_db(
+                query_db(
                     "UPDATE users SET clerk_user_id = %s, email_verified_clerk = true WHERE id = %s",
                     (clerk_user_id, existing['id'])
                 )
@@ -1491,21 +1494,21 @@ def clerk_webhook():
                     if not business:
                         # Create admin business
                         business_id = str(uuid.uuid4())
-                        execute_db("""
+                        query_db("""
                             INSERT INTO businesses (id, name, slug, email, plan, active, clerk_user_id)
                             VALUES (%s, 'Admin Business', 'admin', %s, 'enterprise', true, %s)
                         """, (business_id, email, clerk_user_id))
                     else:
                         business_id = business['id']
                         # Link to Clerk
-                        execute_db(
+                        query_db(
                             "UPDATE businesses SET clerk_user_id = %s WHERE id = %s",
                             (clerk_user_id, business_id)
                         )
 
                     # Create admin user
                     user_id = str(uuid.uuid4())
-                    execute_db("""
+                    query_db("""
                         INSERT INTO users (id, business_id, email, clerk_user_id, name, role, active, email_verified_clerk)
                         VALUES (%s, %s, %s, %s, %s, 'admin', true, true)
                     """, (user_id, business_id, email, clerk_user_id, f"{first_name} {last_name}".strip() or "Admin"))
@@ -1514,7 +1517,7 @@ def clerk_webhook():
                 else:
                     # Regular user - will complete onboarding
                     user_id = str(uuid.uuid4())
-                    execute_db("""
+                    query_db("""
                         INSERT INTO users (id, email, clerk_user_id, name, role, active, email_verified_clerk)
                         VALUES (%s, %s, %s, %s, 'owner', true, true)
                     """, (user_id, email, clerk_user_id, f"{first_name} {last_name}".strip() or email.split('@')[0]))
@@ -1530,7 +1533,7 @@ def clerk_webhook():
         clerk_user_id = user_data.get("id")
         if clerk_user_id:
             try:
-                execute_db(
+                query_db(
                     "UPDATE users SET last_login_at = NOW() WHERE clerk_user_id = %s",
                     (clerk_user_id,)
                 )
@@ -3218,7 +3221,7 @@ def fieldpulse_crew_new():
             error = "Crew name is required"
         else:
             crew_id = str(uuid.uuid4())
-            execute_db("""
+            query_db("""
                 INSERT INTO crews (id, business_id, name, role, email, phone, color, active, created_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, true, NOW())
             """, (crew_id, business_id, name, role or None, email or None, phone or None, color))
@@ -3408,7 +3411,7 @@ def fieldpulse_crew_edit(crew_id):
         action = request.form.get("action", "")
 
         if action == "delete":
-            execute_db(
+            query_db(
                 "UPDATE crews SET active = false WHERE id = %s AND business_id = %s",
                 (crew_id, business_id)
             )
@@ -3424,7 +3427,7 @@ def fieldpulse_crew_edit(crew_id):
         if not name:
             error = "Crew name is required"
         else:
-            execute_db("""
+            query_db("""
                 UPDATE crews SET name = %s, role = %s, email = %s, phone = %s, color = %s
                 WHERE id = %s AND business_id = %s
             """, (name, role or None, email or None, phone or None, color, crew_id, business_id))
