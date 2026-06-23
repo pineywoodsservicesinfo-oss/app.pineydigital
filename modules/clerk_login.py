@@ -59,73 +59,30 @@ CLERK_LOGIN_TEMPLATE = """
     </div>
 
     <script>
-        // Derive Clerk Frontend API domain from publishable key
-        // pk_test_xxx -> https://xxx.clerk.accounts.dev
-        (function() {{
-            const pubKey = "{clerk_pub_key}";
-            let domain = 'frontend-api.clerk.dev';  // fallback
-
-            if (pubKey && pubKey.includes('_')) {{
-                try {{
-                    const encoded = pubKey.split('_').pop();
-                    if (encoded) {{
-                        // Add padding if needed
-                        let padded = encoded;
-                        while (padded.length % 4 !== 0) padded += '=';
-                        const decoded = atob(padded);
-                        // Remove null bytes and trailing $
-                        const clean = decoded.replace(/\\x00/g, '').replace(/\\$/g, '');
-                        if (clean && clean.includes('.')) {{
-                            domain = clean;
-                        }}
-                    }}
-                }} catch (e) {{
-                    console.error('[Clerk] Failed to decode domain:', e);
-                }}
-            }}
-
-            // Store for later use
-            window.__CLERK_DOMAIN = domain;
-
-            // Load scripts dynamically
-            const loadScript = (src, attributes = {{}}) => {{
-                return new Promise((resolve, reject) => {{
-                    const script = document.createElement('script');
-                    script.src = src;
-                    script.crossOrigin = 'anonymous';
-                    script.async = false;  // Load in order
-                    // Add any custom attributes
-                    Object.entries(attributes).forEach(([key, value]) => {{
-                        script.setAttribute(key, value);
-                    }});
-                    script.onload = resolve;
-                    script.onerror = () => reject(new Error('Failed to load: ' + src));
-                    document.head.appendChild(script);
-                }});
-            }};
-
-            // Load UI bundle first, then clerk-js (with publishable key attribute)
-            window.__CLERK_LOADER = Promise.resolve()
-                .then(() => loadScript(`https://${{domain}}/npm/@clerk/ui@latest/dist/ui.browser.js`))
-                .then(() => loadScript(
-                    `https://${{domain}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`,
-                    {{ 'data-clerk-publishable-key': pubKey }}
-                ))
-                .then(() => console.log('[Clerk] Scripts loaded from', domain))
-                .catch(err => console.error('[Clerk] Script loading failed:', err));
-        }})();
-    </script>
-
-    <script>
-        // Configuration
-        const CONFIG = {{
+        // Configuration - injected from Python
+        window.CLERK_CONFIG = {{
             publishableKey: "{clerk_pub_key}",
             apiUrl: "{app_domain}/api/clerk-verify",
             dashboardUrl: "{app_domain}/dashboard",
             onboardingUrl: "{app_domain}/clerk-onboarding"
         }};
+    </script>
 
-        let clerkInstance = null;
+    <!-- Load Clerk from their CDN with proper domain -->
+    <script src="https://{clerk_domain}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+            data-clerk-publishable-key="{clerk_pub_key}"
+            crossorigin="anonymous"
+            async>
+    </script>
+
+    <script>
+        // Wait for Clerk to load
+        window.addEventListener('load', function() {{
+            console.log('[Clerk] Page loaded, checking for Clerk...');
+
+            // Give Clerk a moment to initialize
+            setTimeout(initClerk, 500);
+        }});
 
         async function initClerk() {{
             const signInBtn = document.getElementById('sign-in-btn');
@@ -135,59 +92,24 @@ CLERK_LOGIN_TEMPLATE = """
             try {{
                 console.log('[Clerk] Initializing...');
 
-                // Wait for scripts to load (they were loaded dynamically above)
-                if (window.__CLERK_LOADER) {{
-                    console.log('[Clerk] Waiting for scripts to load...');
-                    await window.__CLERK_LOADER;
-                    await new Promise(resolve => setTimeout(resolve, 200));  // Delay for script execution
-                }}
-
                 // Check if Clerk loaded
                 if (typeof Clerk === 'undefined') {{
-                    throw new Error('Clerk SDK not loaded. Check CDN URLs. Domain: ' + (window.__CLERK_DOMAIN || 'unknown'));
+                    throw new Error('Clerk SDK not loaded');
                 }}
 
-                console.log('[Clerk] SDK found, checking if already initialized...');
+                console.log('[Clerk] SDK found');
 
-                // When using data-clerk-publishable-key, Clerk auto-initializes
-                // Use the global Clerk instance
-                clerkInstance = Clerk;
-
-                // Check if UI bundle loaded (required for modals)
-                if (typeof window.__internal_ClerkUICtor === 'undefined') {{
-                    console.warn('[Clerk] UI bundle not loaded. Waiting...');
-                    // Wait a bit for UI bundle to load
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    if (typeof window.__internal_ClerkUICtor === 'undefined') {{
-                        throw new Error('Clerk UI bundle failed to load. Check @clerk/ui CDN URL.');
-                    }}
+                // Wait for Clerk to be ready
+                if (!Clerk.loaded) {{
+                    console.log('[Clerk] Waiting for Clerk to be ready...');
+                    await Clerk.load();
                 }}
 
-                // Load with UI components - THIS IS THE KEY FIX
-                // Only call load() if not already loaded
-                if (!clerkInstance.loaded) {{
-                    console.log('[Clerk] Calling load()...');
-                    await clerkInstance.load({{
-                        ui: {{ ClerkUI: window.__internal_ClerkUICtor }},  // REQUIRED for modals
-                        routing: 'virtual',
-                    appearance: {{
-                        variables: {{
-                            colorPrimary: '#10b981',
-                            colorBackground: '#1e293b',
-                            colorText: '#ffffff',
-                            colorTextSecondary: '#94a3b8',
-                            colorInputBackground: '#0f172a',
-                            colorInputBorder: '#334155',
-                            borderRadius: '0.75rem',
-                        }}
-                    }}
-                }});
-
-                console.log('[Clerk] Loaded successfully with UI components');
+                console.log('[Clerk] Ready');
 
                 // Check if already signed in
-                if (clerkInstance.user) {{
-                    console.log('[Clerk] User already signed in:', clerkInstance.user);
+                if (Clerk.user) {{
+                    console.log('[Clerk] User already signed in:', Clerk.user);
                     await handleAuthenticatedUser();
                     return;
                 }}
@@ -200,21 +122,21 @@ CLERK_LOGIN_TEMPLATE = """
                 signInText.textContent = 'Sign In';
 
                 // Attach event listeners
-                signInBtn.addEventListener('click', (e) => {{
+                signInBtn.addEventListener('click', function(e) {{
                     e.preventDefault();
-                    openClerkModal('signIn');
+                    openClerkSignIn();
                 }});
 
-                signUpBtn.addEventListener('click', (e) => {{
+                signUpBtn.addEventListener('click', function(e) {{
                     e.preventDefault();
-                    openClerkModal('signUp');
+                    openClerkSignUp();
                 }});
 
                 // Listen for auth state changes
-                clerkInstance.addListener(async (ev) => {{
+                Clerk.addListener(function(ev) {{
                     console.log('[Clerk] Auth state changed:', ev);
                     if (ev.user && ev.session) {{
-                        await handleAuthenticatedUser();
+                        handleAuthenticatedUser();
                     }}
                 }});
 
@@ -227,17 +149,19 @@ CLERK_LOGIN_TEMPLATE = """
             }}
         }}
 
-        function openClerkModal(mode) {{
-            console.log(`[Clerk] Opening ${{mode}} modal`);
+        function openClerkSignIn() {{
+            console.log('[Clerk] Opening sign in modal');
 
-            if (!clerkInstance) {{
+            if (!Clerk) {{
                 showError('Auth not initialized');
                 return;
             }}
 
             try {{
-                const commonProps = {{
+                Clerk.openSignIn({{
                     routing: 'virtual',
+                    redirectUrl: window.CLERK_CONFIG.dashboardUrl,
+                    afterSignInUrl: window.CLERK_CONFIG.dashboardUrl,
                     appearance: {{
                         variables: {{
                             colorPrimary: '#10b981',
@@ -249,27 +173,43 @@ CLERK_LOGIN_TEMPLATE = """
                             borderRadius: '0.75rem',
                         }}
                     }}
-                }};
-
-                if (mode === 'signIn') {{
-                    clerkInstance.openSignIn({{
-                        ...commonProps,
-                        redirectUrl: CONFIG.dashboardUrl,
-                        afterSignInUrl: CONFIG.dashboardUrl
-                    }});
-                }} else {{
-                    clerkInstance.openSignUp({{
-                        ...commonProps,
-                        redirectUrl: CONFIG.onboardingUrl,
-                        afterSignUpUrl: CONFIG.onboardingUrl
-                    }});
-                }}
-
-                console.log(`[Clerk] ${{mode}} modal opened`);
-
+                }});
+                console.log('[Clerk] Sign in modal opened');
             }} catch (err) {{
-                console.error('[Clerk] Failed to open modal:', err);
-                showError('Failed to open auth modal: ' + err.message);
+                console.error('[Clerk] Failed to open sign in:', err);
+                showError('Failed to open sign in: ' + err.message);
+            }}
+        }}
+
+        function openClerkSignUp() {{
+            console.log('[Clerk] Opening sign up modal');
+
+            if (!Clerk) {{
+                showError('Auth not initialized');
+                return;
+            }}
+
+            try {{
+                Clerk.openSignUp({{
+                    routing: 'virtual',
+                    redirectUrl: window.CLERK_CONFIG.onboardingUrl,
+                    afterSignUpUrl: window.CLERK_CONFIG.onboardingUrl,
+                    appearance: {{
+                        variables: {{
+                            colorPrimary: '#10b981',
+                            colorBackground: '#1e293b',
+                            colorText: '#ffffff',
+                            colorTextSecondary: '#94a3b8',
+                            colorInputBackground: '#0f172a',
+                            colorInputBorder: '#334155',
+                            borderRadius: '0.75rem',
+                        }}
+                    }}
+                }});
+                console.log('[Clerk] Sign up modal opened');
+            }} catch (err) {{
+                console.error('[Clerk] Failed to open sign up:', err);
+                showError('Failed to open sign up: ' + err.message);
             }}
         }}
 
@@ -282,34 +222,29 @@ CLERK_LOGIN_TEMPLATE = """
 
             try {{
                 // Get JWT token from Clerk using the custom template
-                const token = await clerkInstance.session.getToken({{ template: "fieldpulse-template" }});
+                const token = await Clerk.session.getToken({{ template: "fieldpulse-template" }});
 
                 if (!token) {{
-                    throw new Error('No token received from Clerk. Check JWT template configuration.');
+                    throw new Error('No token received from Clerk');
                 }}
 
                 console.log('[Clerk] Got token, verifying with backend...');
 
                 // Send token to Flask backend
-                const response = await fetch(CONFIG.apiUrl, {{
+                const response = await fetch(window.CLERK_CONFIG.apiUrl, {{
                     method: 'POST',
-                    headers: {{
-                        'Content-Type': 'application/json',
-                    }},
-                    body: JSON.stringify({{ token: token }})
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{token: token}})
                 }});
 
                 const data = await response.json();
                 console.log('[Clerk] Backend response:', response.status, data);
 
                 if (response.ok && data.success) {{
-                    console.log('[Clerk] Auth successful:', data);
-                    // Redirect to dashboard or onboarding for new users
-                    const redirectTo = data.redirect || CONFIG.dashboardUrl;
-                    window.location.href = redirectTo;
+                    console.log('[Clerk] Auth successful');
+                    window.location.href = data.redirect || window.CLERK_CONFIG.dashboardUrl;
                 }} else {{
-                    const errorMsg = data.error || 'Authentication failed';
-                    throw new Error(errorMsg);
+                    throw new Error(data.error || 'Authentication failed');
                 }}
 
             }} catch (err) {{
@@ -319,8 +254,8 @@ CLERK_LOGIN_TEMPLATE = """
                 authContainer.classList.remove('hidden');
 
                 // Sign out if backend verification failed
-                if (clerkInstance) {{
-                    await clerkInstance.signOut();
+                if (Clerk) {{
+                    Clerk.signOut();
                 }}
             }}
         }}
@@ -331,17 +266,42 @@ CLERK_LOGIN_TEMPLATE = """
             errorDiv.textContent = msg;
             errorDiv.classList.remove('hidden');
         }}
-
-        // Initialize when DOM is ready
-        if (document.readyState === 'loading') {{
-            document.addEventListener('DOMContentLoaded', initClerk);
-        }} else {{
-            initClerk();
-        }}
     </script>
 </body>
 </html>
 """
+
+
+def get_clerk_domain(publishable_key: str) -> str:
+    """Extract Clerk Frontend API domain from publishable key."""
+    try:
+        import base64
+
+        # Key format: pk_<env>_<base64data>
+        parts = publishable_key.split('_')
+        if len(parts) < 3:
+            return 'frontend-api.clerk.dev'
+
+        encoded = parts[2] if len(parts) > 2 else ''
+        if not encoded:
+            return 'frontend-api.clerk.dev'
+
+        # Add padding if needed
+        padding = 4 - len(encoded) % 4
+        if padding != 4:
+            encoded += '=' * padding
+
+        decoded = base64.b64decode(encoded).decode('utf-8')
+        # Remove null bytes and trailing $
+        decoded = decoded.replace('\x00', '').rstrip('$')
+
+        # Ensure it has a dot (is a domain)
+        if '.' in decoded:
+            return decoded
+    except Exception:
+        pass
+
+    return 'frontend-api.clerk.dev'
 
 
 def render_clerk_login_page(clerk_pub_key: str, app_domain: str, tailwind_cdn: str, custom_css: str) -> str:
@@ -357,8 +317,11 @@ def render_clerk_login_page(clerk_pub_key: str, app_domain: str, tailwind_cdn: s
     Returns:
         Complete HTML page as string
     """
+    clerk_domain = get_clerk_domain(clerk_pub_key)
+
     return CLERK_LOGIN_TEMPLATE.format(
         clerk_pub_key=clerk_pub_key,
+        clerk_domain=clerk_domain,
         app_domain=app_domain.rstrip('/'),
         tailwind_cdn=tailwind_cdn,
         custom_css=custom_css
