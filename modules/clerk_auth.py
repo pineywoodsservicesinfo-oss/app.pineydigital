@@ -138,13 +138,12 @@ def get_auth_token_from_request() -> Optional[str]:
     if auth_header.startswith("Bearer "):
         return auth_header[7:]
 
-    # Check Clerk session cookies
-    from flask import session as flask_session
+    # Check Clerk session cookie (__session is set by Clerk after sign-in)
+    clerk_session = request.cookies.get("__session")
+    if clerk_session:
+        return clerk_session
 
-    # Clerk uses __session or __client_uat cookies
-    # The actual JWT is typically in a cookie or passed via header
-
-    # For development: check custom header from frontend
+    # Check custom header from frontend
     token = request.headers.get("X-Clerk-Token")
     if token:
         return token
