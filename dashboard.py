@@ -1459,6 +1459,9 @@ def api_create_business():
         session["fp_business_id"] = business_id
         session["fp_user_name"] = user_name
 
+        # Mark session as modified to ensure it persists
+        session.modified = True
+
         logger.info(f"Session set: user_id={user_id}, business_id={business_id}")
 
         # Clear temporary Clerk session data
