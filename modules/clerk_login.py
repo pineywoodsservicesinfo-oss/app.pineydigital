@@ -88,22 +88,29 @@ CLERK_LOGIN_TEMPLATE = """
             window.__CLERK_DOMAIN = domain;
 
             // Load scripts dynamically
-            const loadScript = (src) => {{
+            const loadScript = (src, attributes = {{}}) => {{
                 return new Promise((resolve, reject) => {{
                     const script = document.createElement('script');
                     script.src = src;
                     script.crossOrigin = 'anonymous';
                     script.async = false;  // Load in order
+                    // Add any custom attributes
+                    Object.entries(attributes).forEach(([key, value]) => {{
+                        script.setAttribute(key, value);
+                    }});
                     script.onload = resolve;
                     script.onerror = () => reject(new Error('Failed to load: ' + src));
                     document.head.appendChild(script);
                 }});
             }};
 
-            // Load UI bundle first, then clerk-js
+            // Load UI bundle first, then clerk-js (with publishable key attribute)
             window.__CLERK_LOADER = Promise.resolve()
                 .then(() => loadScript(`https://${{domain}}/npm/@clerk/ui@latest/dist/ui.browser.js`))
-                .then(() => loadScript(`https://${{domain}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`))
+                .then(() => loadScript(
+                    `https://${{domain}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`,
+                    {{ 'data-clerk-publishable-key': pubKey }}
+                ))
                 .then(() => console.log('[Clerk] Scripts loaded from', domain))
                 .catch(err => console.error('[Clerk] Script loading failed:', err));
         }})();
@@ -132,13 +139,19 @@ CLERK_LOGIN_TEMPLATE = """
                 if (window.__CLERK_LOADER) {{
                     console.log('[Clerk] Waiting for scripts to load...');
                     await window.__CLERK_LOADER;
-                    await new Promise(resolve => setTimeout(resolve, 100));  // Small delay for script execution
+                    await new Promise(resolve => setTimeout(resolve, 200));  // Delay for script execution
                 }}
 
                 // Check if Clerk loaded
                 if (typeof Clerk === 'undefined') {{
                     throw new Error('Clerk SDK not loaded. Check CDN URLs. Domain: ' + (window.__CLERK_DOMAIN || 'unknown'));
                 }}
+
+                console.log('[Clerk] SDK found, checking if already initialized...');
+
+                // When using data-clerk-publishable-key, Clerk auto-initializes
+                // Use the global Clerk instance
+                clerkInstance = Clerk;
 
                 // Check if UI bundle loaded (required for modals)
                 if (typeof window.__internal_ClerkUICtor === 'undefined') {{
@@ -150,13 +163,13 @@ CLERK_LOGIN_TEMPLATE = """
                     }}
                 }}
 
-                // Create Clerk instance
-                clerkInstance = new Clerk(CONFIG.publishableKey);
-
                 // Load with UI components - THIS IS THE KEY FIX
-                await clerkInstance.load({{
-                    ui: {{ ClerkUI: window.__internal_ClerkUICtor }},  // REQUIRED for modals
-                    routing: 'virtual',
+                // Only call load() if not already loaded
+                if (!clerkInstance.loaded) {{
+                    console.log('[Clerk] Calling load()...');
+                    await clerkInstance.load({{
+                        ui: {{ ClerkUI: window.__internal_ClerkUICtor }},  // REQUIRED for modals
+                        routing: 'virtual',
                     appearance: {{
                         variables: {{
                             colorPrimary: '#10b981',
