@@ -608,7 +608,7 @@ LANDING_PAGE_TEMPLATE = """
 
             <div class="flex items-center gap-2 sm:gap-4">
                 <a href="/clerk-login" class="text-sm sm:text-base text-gray-300 hover:text-white transition whitespace-nowrap">Sign In</a>
-                <a href="{waitlist_url}" class="px-3 sm:px-5 py-2 sm:py-2.5 bg-primary-500 hover:bg-primary-600 text-white text-sm sm:text-base font-medium rounded-lg transition whitespace-nowrap">Join Waitlist</a>
+                <button onclick="openWaitlistModal()" class="px-3 sm:px-5 py-2 sm:py-2.5 bg-primary-500 hover:bg-primary-600 text-white text-sm sm:text-base font-medium rounded-lg transition whitespace-nowrap">Join Waitlist</button>
             </div>
         </div>
     </nav>
@@ -653,9 +653,9 @@ LANDING_PAGE_TEMPLATE = """
                 </p>
 
                 <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-                    <a href="{waitlist_url}" class="w-full sm:w-auto px-8 py-4 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-xl transition shadow-lg shadow-primary-500/25">
+                    <button onclick="openWaitlistModal()" class="w-full sm:w-auto px-8 py-4 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-xl transition shadow-lg shadow-primary-500/25">
                         Join the Waitlist
-                    </a>
+                    </button>
                     <a href="#features" class="w-full sm:w-auto px-8 py-4 bg-dark-800 hover:bg-dark-700 text-white font-semibold rounded-xl transition border border-white/10">
                         Learn More
                     </a>
@@ -785,9 +785,9 @@ LANDING_PAGE_TEMPLATE = """
                         </li>
                     </ul>
 
-                    <a href="{waitlist_url}" class="block w-full py-3 text-center border border-white/20 rounded-lg font-medium hover:bg-white/5 transition">
+                    <button onclick="openWaitlistModal()" class="block w-full py-3 text-center border border-white/20 rounded-lg font-medium hover:bg-white/5 transition">
                         Get Started Free
-                    </a>
+                    </button>
                 </div>
 
                 <!-- Starter Plan -->
@@ -823,9 +823,9 @@ LANDING_PAGE_TEMPLATE = """
                         </li>
                     </ul>
 
-                    <a href="{waitlist_url}" class="block w-full py-3 text-center bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium transition">
+                    <button onclick="openWaitlistModal()" class="block w-full py-3 text-center bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium transition">
                         Join Waitlist
-                    </a>
+                    </button>
                 </div>
 
                 <!-- Pro Plan -->
@@ -925,12 +925,12 @@ LANDING_PAGE_TEMPLATE = """
 
             <p class="text-xl text-gray-400 mb-10">Join the waitlist and be the first to try FieldPulse. Get 50% off your first 6 months as a beta user.</p>
 
-            <a href="{waitlist_url}" class="inline-flex items-center gap-2 px-8 py-4 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-xl transition shadow-lg shadow-primary-500/25">
+            <button onclick="openWaitlistModal()" class="inline-flex items-center gap-2 px-8 py-4 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-xl transition shadow-lg shadow-primary-500/25">
                 Join the Waitlist
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
                 </svg>
-            </a>
+            </button>
         </div>
     </section>
 
@@ -956,6 +956,191 @@ LANDING_PAGE_TEMPLATE = """
             </div>
         </div>
     </footer>
+
+    <!-- Waitlist Modal -->
+    <div id="waitlist-modal" class="fixed inset-0 z-[60] hidden">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeWaitlistModal()"></div>
+
+        <!-- Modal Content -->
+        <div class="relative min-h-screen flex items-center justify-center p-4">
+            <div class="bg-dark-800 rounded-2xl border border-white/10 w-full max-w-md p-6 sm:p-8 shadow-2xl transform transition-all">
+                <!-- Header -->
+                <div class="text-center mb-6">
+                    <div class="w-12 h-12 bg-gradient-to-br from-primary-400 to-primary-600 rounded-xl mx-auto mb-4 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <h2 class="text-2xl font-bold text-white">Join the Waitlist</h2>
+                    <p class="text-gray-400 mt-2">Get early access + 50% off for 6 months</p>
+                </div>
+
+                <!-- Form -->
+                <form id="waitlist-form" onsubmit="submitWaitlist(event)">
+                    <div class="space-y-4">
+                        <!-- Email (Required) -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-1">Email *</label>
+                            <input type="email" name="email" required
+                                class="w-full px-4 py-3 bg-dark-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition"
+                                placeholder="you@company.com">
+                        </div>
+
+                        <!-- Name -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-1">Name</label>
+                            <input type="text" name="name"
+                                class="w-full px-4 py-3 bg-dark-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition"
+                                placeholder="John Smith">
+                        </div>
+
+                        <!-- Company Name -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-1">Company Name</label>
+                            <input type="text" name="company_name"
+                                class="w-full px-4 py-3 bg-dark-900 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition"
+                                placeholder="Acme Landscaping">
+                        </div>
+
+                        <!-- Industry -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-1">Industry</label>
+                            <select name="industry"
+                                class="w-full px-4 py-3 bg-dark-900 border border-white/10 rounded-lg text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition"
+                            >
+                                <option value="">Select your industry</option>
+                                <option value="landscaping">Landscaping / Lawn Care</option>
+                                <option value="hvac">HVAC</option>
+                                <option value="plumbing">Plumbing</option>
+                                <option value="electrical">Electrical</option>
+                                <option value="cleaning">Cleaning Services</option>
+                                <option value="pest_control">Pest Control</option>
+                                <option value="general_contracting">General Contracting</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+
+                        <!-- Company Size -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-1">Company Size</label>
+                            <select name="company_size"
+                                class="w-full px-4 py-3 bg-dark-900 border border-white/10 rounded-lg text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition"
+                            >
+                                <option value="">How many crew members?</option>
+                                <option value="1-5">1-5</option>
+                                <option value="6-10">6-10</option>
+                                <option value="11-25">11-25</option>
+                                <option value="25+">25+</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Error Message -->
+                    <div id="waitlist-error" class="hidden mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm"></div>
+
+                    <!-- Submit Button -->
+                    <button type="submit" id="waitlist-submit"
+                        class="w-full mt-6 py-3 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-xl transition flex items-center justify-center gap-2"
+                    >
+                        <span id="waitlist-btn-text">Join Waitlist</span>
+                        <svg id="waitlist-spinner" class="hidden w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </button>
+                </form>
+
+                <!-- Close Button -->
+                <button onclick="closeWaitlistModal()"
+                    class="absolute top-4 right-4 text-gray-400 hover:text-white transition p-1"
+                >
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Waitlist JavaScript -->
+    <script>
+        function openWaitlistModal() {{
+            document.getElementById('waitlist-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            // Focus email field
+            setTimeout(() => document.querySelector('input[name="email"]')?.focus(), 100);
+        }}
+
+        function closeWaitlistModal() {{
+            document.getElementById('waitlist-modal').classList.add('hidden');
+            document.body.style.overflow = '';
+            // Reset form
+            document.getElementById('waitlist-form').reset();
+            document.getElementById('waitlist-error').classList.add('hidden');
+        }}
+
+        async function submitWaitlist(event) {{
+            event.preventDefault();
+
+            const form = document.getElementById('waitlist-form');
+            const btnText = document.getElementById('waitlist-btn-text');
+            const spinner = document.getElementById('waitlist-spinner');
+            const errorDiv = document.getElementById('waitlist-error');
+
+            // Show loading state
+            btnText.textContent = 'Joining...';
+            spinner.classList.remove('hidden');
+            errorDiv.classList.add('hidden');
+
+            // Gather form data
+            const formData = {{
+                email: form.email.value,
+                name: form.name.value,
+                company_name: form.company_name.value,
+                industry: form.industry.value,
+                company_size: form.company_size.value,
+                source: 'website'
+            }};
+
+            try {{
+                const response = await fetch('/api/waitlist', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify(formData)
+                }});
+
+                const result = await response.json();
+
+                if (result.success) {{
+                    // Close modal and show confirmation
+                    closeWaitlistModal();
+                    document.getElementById('waitlist-confirmation').style.display = 'block';
+
+                    // Scroll to top to see confirmation
+                    window.scrollTo({{ top: 0, behavior: 'smooth' }});
+
+                    // Auto-hide confirmation after 5 seconds
+                    setTimeout(() => {{
+                        document.getElementById('waitlist-confirmation').style.display = 'none';
+                    }}, 5000);
+                }} else {{
+                    throw new Error(result.error || 'Something went wrong');
+                }}
+            }} catch (err) {{
+                errorDiv.textContent = err.message || 'Failed to join waitlist. Please try again.';
+                errorDiv.classList.remove('hidden');
+            }} finally {{
+                btnText.textContent = 'Join Waitlist';
+                spinner.classList.remove('hidden');
+            }}
+        }}
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', (e) => {{
+            if (e.key === 'Escape') closeWaitlistModal();
+        }});
+    </script>
 </body>
 </html>
 """
@@ -966,17 +1151,11 @@ def fieldpulse_redirect():
     if session.get("fp_logged_in"):
         return redirect(url_for("fieldpulse_dashboard"))
 
-    # Show landing page for visitors
-    clerk_pub_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
-    clerk_domain = "notable-turtle-45.accounts.dev"  # Your Clerk domain (no .clerk)
-    waitlist_url = f"https://{clerk_domain}/waitlist"
-
-    # Check if user just joined waitlist (redirect from Clerk)
+    # Check if user just joined waitlist (for confirmation banner)
     waitlist_success = request.args.get('waitlist') == 'success'
 
     return render_template_string(
         LANDING_PAGE_TEMPLATE.format(
-            waitlist_url=waitlist_url,
             show_confirmation='block' if waitlist_success else 'none'
         )
     )
@@ -2007,6 +2186,238 @@ def clerk_webhook():
                 logger.error(f"Failed to update last_login: {e}")
 
     return jsonify({"status": "ok"})
+
+
+# ═════════════════════════════════════════════════════════════════
+# WAITLIST API
+# ═════════════════════════════════════════════════════════════════
+
+@app.route("/api/waitlist", methods=["POST"])
+def api_waitlist_signup():
+    """Handle waitlist signup - save to DB and send emails."""
+    try:
+        data = request.get_json() or {}
+
+        # Extract fields
+        email = data.get('email', '').strip().lower()
+        name = data.get('name', '').strip()
+        company_name = data.get('company_name', '').strip()
+        phone = data.get('phone', '').strip()
+        industry = data.get('industry', '').strip()
+        company_size = data.get('company_size', '').strip()
+
+        # Validate email
+        if not email or '@' not in email:
+            return jsonify({"error": "Valid email is required"}), 400
+
+        # Check if already in waitlist
+        existing = query_db(
+            "SELECT id, status FROM waitlist_entries WHERE email = %s",
+            (email,), one=True
+        )
+
+        if existing:
+            return jsonify({
+                "success": True,
+                "message": "You're already on the waitlist!",
+                "already_exists": True
+            })
+
+        # Get metadata
+        source = data.get('source', 'website')
+        ip_address = request.remote_addr
+        user_agent = request.headers.get('User-Agent', '')[:500]
+
+        # Insert into database
+        waitlist_id = str(uuid.uuid4())
+        query_db("""
+            INSERT INTO waitlist_entries (
+                id, email, name, company_name, phone, industry, company_size,
+                status, source, ip_address, user_agent
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            waitlist_id, email, name, company_name, phone, industry, company_size,
+            'pending', source, ip_address, user_agent
+        ))
+
+        logger.info(f"New waitlist signup: {email} ({name}, {company_name})")
+
+        # Send confirmation email to user
+        send_waitlist_confirmation_email(email, name)
+
+        # Send notification to admin
+        send_waitlist_notification_email(email, name, company_name, industry, company_size)
+
+        return jsonify({
+            "success": True,
+            "message": "Thanks for joining the waitlist!",
+            "waitlist_id": waitlist_id
+        })
+
+    except Exception as e:
+        logger.error(f"Waitlist signup error: {e}")
+        return jsonify({"error": "Something went wrong. Please try again."}), 500
+
+
+def send_waitlist_confirmation_email(email: str, name: str = ""):
+    """Send confirmation email to waitlist user."""
+    from modules.email_sender import send_email
+
+    greeting = f"Hi {name}," if name else "Hi there,"
+
+    subject = "You're on the FieldPulse waitlist!"
+
+    body = f"""{greeting}
+
+Thanks for joining the FieldPulse waitlist! We're excited to help you streamline your field service operations.
+
+What to expect:
+• Beta launches September 2026
+• You'll get early access + 50% off for 6 months
+• We'll email you when it's ready
+
+Have questions? Reply to this email anytime.
+
+- The FieldPulse Team
+https://fieldpulse.pineydigital.com
+"""
+
+    html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; padding: 40px 20px; }}
+    .container {{ max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; padding: 40px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }}
+    .logo {{ width: 48px; height: 48px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 12px; margin-bottom: 24px; display: flex; align-items: center; justify-content: center; }}
+    .logo svg {{ width: 28px; height: 28px; color: white; }}
+    h1 {{ color: #0f172a; font-size: 24px; margin: 0 0 16px; }}
+    p {{ color: #475569; line-height: 1.6; margin: 0 0 16px; }}
+    .features {{ background: #f0fdf4; border-radius: 12px; padding: 20px; margin: 24px 0; }}
+    .features h3 {{ color: #065f46; margin: 0 0 12px; font-size: 16px; }}
+    .features ul {{ margin: 0; padding-left: 20px; color: #065f46; }}
+    .features li {{ margin-bottom: 8px; }}
+    .cta {{ display: inline-block; background: #10b981; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin-top: 8px; }}
+    .footer {{ margin-top: 32px; padding-top: 24px; border-top: 1px solid #e2e8f0; color: #94a3b8; font-size: 14px; }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+    </div>
+    <h1>You're on the waitlist!</h1>
+    <p>{greeting}</p>
+    <p>Thanks for joining the FieldPulse waitlist! We're excited to help you streamline your field service operations.</p>
+
+    <div class="features">
+      <h3>What to expect:</h3>
+      <ul>
+        <li>Beta launches <strong>September 2026</strong></li>
+        <li>Early access + <strong>50% off for 6 months</strong></li>
+        <li>We'll email you when it's ready</li>
+      </ul>
+    </div>
+
+    <p>Have questions? Reply to this email anytime.</p>
+
+    <div class="footer">
+      <p>- The FieldPulse Team</p>
+      <p><a href="https://fieldpulse.pineydigital.com" style="color: #10b981;">fieldpulse.pineydigital.com</a></p>
+    </div>
+  </div>
+</body>
+</html>
+"""
+
+    success, msg = send_email(email, subject, body, html_body)
+    if success:
+        logger.info(f"Waitlist confirmation email sent to {email}")
+    else:
+        logger.error(f"Failed to send waitlist confirmation: {msg}")
+
+    return success
+
+
+def send_waitlist_notification_email(email: str, name: str = "", company_name: str = "",
+                                        industry: str = "", company_size: str = ""):
+    """Send notification email to admin about new waitlist signup."""
+    from modules.email_sender import send_email
+
+    admin_email = os.environ.get("ADMIN_EMAIL", "joel@pineydigital.com")
+
+    subject = f"🎉 New FieldPulse Waitlist Signup: {email}"
+
+    body = f"""New Waitlist Signup
+
+Email: {email}
+Name: {name or 'N/A'}
+Company: {company_name or 'N/A'}
+Industry: {industry or 'N/A'}
+Company Size: {company_size or 'N/A'}
+
+View in dashboard: https://fieldpulse.pineydigital.com/admin/waitlist
+
+- FieldPulse System
+"""
+
+    html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; padding: 40px 20px; }}
+    .container {{ max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; padding: 40px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }}
+    h1 {{ color: #0f172a; font-size: 24px; margin: 0 0 8px; }}
+    .subtitle {{ color: #64748b; margin: 0 0 24px; }}
+    .details {{ background: #f8fafc; border-radius: 12px; padding: 20px; margin: 24px 0; }}
+    .detail-row {{ display: flex; margin-bottom: 12px; }}
+    .detail-label {{ width: 120px; color: #64748b; font-weight: 500; }}
+    .detail-value {{ color: #0f172a; }}
+    .cta {{ display: inline-block; background: #10b981; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin-top: 8px; }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎉 New Waitlist Signup</h1>
+    <p class="subtitle">Someone just joined the FieldPulse waitlist!</p>
+
+    <div class="details">
+      <div class="detail-row">
+        <span class="detail-label">Email:</span>
+        <span class="detail-value">{email}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Name:</span>
+        <span class="detail-value">{name or 'N/A'}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Company:</span>
+        <span class="detail-value">{company_name or 'N/A'}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Industry:</span>
+        <span class="detail-value">{industry or 'N/A'}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Size:</span>
+        <span class="detail-value">{company_size or 'N/A'}</span>
+      </div>
+    </div>
+
+    <a href="https://fieldpulse.pineydigital.com/admin/waitlist" class="cta">View Waitlist</a>
+  </div>
+</body>
+</html>
+"""
+
+    success, msg = send_email(admin_email, subject, body, html_body)
+    if success:
+        logger.info(f"Waitlist notification sent to admin about {email}")
+    else:
+        logger.error(f"Failed to send admin notification: {msg}")
+
+    return success
 
 
 # ═════════════════════════════════════════════════════════════════

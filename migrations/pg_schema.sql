@@ -484,6 +484,50 @@ CREATE TABLE IF NOT EXISTS booking_notifications (
 
 CREATE INDEX idx_notif_booking ON booking_notifications(booking_id);
 
+-- ── WAITLIST SYSTEM ────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS waitlist_entries (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email           VARCHAR(255) UNIQUE NOT NULL,
+    name            VARCHAR(255),
+    company_name    VARCHAR(255),
+    phone           VARCHAR(50),
+    industry        VARCHAR(100),         -- landscaping, hvac, plumbing, etc.
+    company_size    VARCHAR(50),          -- 1-5, 6-10, 11-25, 25+
+
+    -- Status tracking
+    status          VARCHAR(50) DEFAULT 'pending',  -- pending/approved/converted/rejected
+
+    -- Metadata
+    source          VARCHAR(100) DEFAULT 'website', -- website, referral, etc.
+    utm_campaign    VARCHAR(255),
+    utm_source      VARCHAR(255),
+    utm_medium      VARCHAR(255),
+    ip_address      INET,
+    user_agent      TEXT,
+
+    -- Email tracking
+    confirmation_sent   BOOLEAN DEFAULT FALSE,
+    confirmation_sent_at TIMESTAMP WITH TIME ZONE,
+    notification_sent   BOOLEAN DEFAULT FALSE,      -- Admin notification
+    notification_sent_at TIMESTAMP WITH TIME ZONE,
+
+    -- Conversion tracking
+    converted_to_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    converted_at      TIMESTAMP WITH TIME ZONE,
+
+    -- Timestamps
+    created_at        TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at        TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_waitlist_email ON waitlist_entries(email);
+CREATE INDEX idx_waitlist_status ON waitlist_entries(status);
+CREATE INDEX idx_waitlist_created ON waitlist_entries(created_at);
+
+CREATE TRIGGER update_waitlist_updated_at BEFORE UPDATE ON waitlist_entries
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- ── REVIEW SYSTEM ───────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS review_settings (
