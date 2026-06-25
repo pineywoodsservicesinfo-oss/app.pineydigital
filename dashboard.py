@@ -857,7 +857,7 @@ LANDING_PAGE_TEMPLATE = """
                         </li>
                     </ul>
 
-                    <a href="{waitlist_url}" class="block w-full py-3 text-center border border-white/20 rounded-lg font-medium hover:bg-white/5 transition">
+                    <button onclick="openWaitlistModal()" class="block w-full py-3 text-center border border-white/20 rounded-lg font-medium hover:bg-white/5 transition">
                         Join Waitlist
                     </a>
                 </div>
