@@ -591,14 +591,14 @@ LANDING_PAGE_TEMPLATE = """
 <body class="bg-dark-900 text-white antialiased">
     <!-- Navigation -->
     <nav class="fixed top-0 left-0 right-0 z-50 bg-dark-900/80 backdrop-blur-md border-b border-white/10">
-        <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-gradient-to-br from-primary-400 to-primary-600 rounded-xl flex items-center justify-center">
-                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
+            <div class="flex items-center gap-2 sm:gap-3">
+                <div class="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-primary-400 to-primary-600 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <svg class="w-5 h-5 sm:w-6 sm:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                     </svg>
                 </div>
-                <span class="text-xl font-bold">FieldPulse</span>
+                <span class="text-lg sm:text-xl font-bold">FieldPulse</span>
             </div>
             <div class="hidden md:flex items-center gap-8">
                 <a href="#features" class="text-gray-300 hover:text-white transition">Features</a>
@@ -606,9 +606,9 @@ LANDING_PAGE_TEMPLATE = """
                 <a href="#faq" class="text-gray-300 hover:text-white transition">FAQ</a>
             </div>
 
-            <div class="flex items-center gap-4">
-                <a href="/clerk-login" class="text-gray-300 hover:text-white transition">Sign In</a>
-                <a href="{waitlist_url}" class="px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-lg transition">Join Waitlist</a>
+            <div class="flex items-center gap-2 sm:gap-4">
+                <a href="/clerk-login" class="text-sm sm:text-base text-gray-300 hover:text-white transition whitespace-nowrap">Sign In</a>
+                <a href="{waitlist_url}" class="px-3 sm:px-5 py-2 sm:py-2.5 bg-primary-500 hover:bg-primary-600 text-white text-sm sm:text-base font-medium rounded-lg transition whitespace-nowrap">Join Waitlist</a>
             </div>
         </div>
     </nav>
@@ -623,9 +623,9 @@ LANDING_PAGE_TEMPLATE = """
                     <span class="text-primary-400 text-sm font-medium">Beta Launching September 2026</span>
                 </div>
 
-                <h1 class="text-5xl lg:text-7xl font-bold leading-tight mb-6">
-                    Crew Management for
-                    <span class="gradient-text">Service Businesses</span>
+                <h1 class="text-4xl sm:text-5xl lg:text-7xl font-bold leading-tight mb-6">
+                    <span class="block">Crew Management</span>
+                    <span class="block">for <span class="gradient-text">Service Businesses</span></span>
                 </h1>
 
                 <p class="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
@@ -948,7 +948,7 @@ def fieldpulse_redirect():
 
     # Show landing page for visitors
     clerk_pub_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
-    clerk_domain = "notable-turtle-45.clerk.accounts.dev"  # Your Clerk domain
+    clerk_domain = "notable-turtle-45.accounts.dev"  # Your Clerk domain (no .clerk)
     waitlist_url = f"https://{clerk_domain}/waitlist"
 
     return render_template_string(
