@@ -557,10 +557,403 @@ body{font-family:'Inter',sans-serif;}
 # FIELD PULSE ROUTES
 # ═════════════════════════════════════════════════════════════════
 
+# Landing Page Template
+LANDING_PAGE_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldPulse - Crew Management for Service Businesses</title>
+    <meta name="description" content="FieldPulse helps landscaping, HVAC, plumbing, and service businesses manage crews, schedule jobs, and delight customers.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: { 50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#6ee7b7', 400: '#34d399', 500: '#10b981', 600: '#059669', 700: '#047857', 800: '#065f46', 900: '#064e3b' },
+                        dark: { 900: '#0f172a', 800: '#1e293b', 700: '#334155', 600: '#475569' }
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .gradient-text { background: linear-gradient(135deg, #10b981 0%, #059669 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .hero-glow { position: absolute; width: 600px; height: 600px; background: radial-gradient(circle, rgba(16,185,129,0.15) 0%, transparent 70%); border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+        .card-hover { transition: all 0.3s ease; }
+        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -15px rgba(16,185,129,0.2); }
+    </style>
+</head>
+<body class="bg-dark-900 text-white antialiased">
+    <!-- Navigation -->
+    <nav class="fixed top-0 left-0 right-0 z-50 bg-dark-900/80 backdrop-blur-md border-b border-white/10">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-gradient-to-br from-primary-400 to-primary-600 rounded-xl flex items-center justify-center">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <span class="text-xl font-bold">FieldPulse</span>
+            </div>
+            <div class="hidden md:flex items-center gap-8">
+                <a href="#features" class="text-gray-300 hover:text-white transition">Features</a>
+                <a href="#pricing" class="text-gray-300 hover:text-white transition">Pricing</a>
+                <a href="#faq" class="text-gray-300 hover:text-white transition">FAQ</a>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <a href="/clerk-login" class="text-gray-300 hover:text-white transition">Sign In</a>
+                <a href="{waitlist_url}" class="px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-lg transition">Join Waitlist</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden">
+        <div class="hero-glow"></div>
+        <div class="max-w-7xl mx-auto px-6 relative">
+            <div class="text-center max-w-4xl mx-auto">
+                <div class="inline-flex items-center gap-2 px-4 py-2 bg-primary-500/10 border border-primary-500/20 rounded-full mb-8">
+                    <span class="w-2 h-2 bg-primary-400 rounded-full animate-pulse"></span>
+                    <span class="text-primary-400 text-sm font-medium">Beta Launching September 2026</span>
+                </div>
+
+                <h1 class="text-5xl lg:text-7xl font-bold leading-tight mb-6">
+                    Crew Management for
+                    <span class="gradient-text">Service Businesses</span>
+                </h1>
+
+                <p class="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
+                    FieldPulse helps landscaping, HVAC, plumbing, and field service businesses schedule crews, manage jobs, and delight customers—all from one platform.
+                </p>
+
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+                    <a href="{waitlist_url}" class="w-full sm:w-auto px-8 py-4 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-xl transition shadow-lg shadow-primary-500/25">
+                        Join the Waitlist
+                    </a>
+                    <a href="#features" class="w-full sm:w-auto px-8 py-4 bg-dark-800 hover:bg-dark-700 text-white font-semibold rounded-xl transition border border-white/10">
+                        Learn More
+                    </a>
+                </div>
+
+                <p class="mt-6 text-sm text-gray-500">
+                    Free tier available • No credit card required
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="py-24 bg-dark-800">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl lg:text-4xl font-bold mb-4">Everything You Need to Run Your Crews</h2>
+                <p class="text-gray-400 text-lg">Powerful tools designed specifically for field service businesses</p>
+            </div>
+
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- Feature 1 -->
+                <div class="p-6 bg-dark-900 rounded-2xl border border-white/5 card-hover">
+                    <div class="w-12 h-12 bg-primary-500/10 rounded-xl flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">Crew Management</h3>
+                    <p class="text-gray-400">Organize crews by skills, track availability, and assign jobs with one click.</p>
+                </div>
+
+                <!-- Feature 2 -->
+                <div class="p-6 bg-dark-900 rounded-2xl border border-white/5 card-hover">
+                    <div class="w-12 h-12 bg-primary-500/10 rounded-xl flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">Smart Scheduling</h3>
+                    <p class="text-gray-400">Visual calendar view, drag-and-drop scheduling, and automatic conflict detection.</p>
+                </div>
+
+                <!-- Feature 3 -->
+                <div class="p-6 bg-dark-900 rounded-2xl border border-white/5 card-hover">
+                    <div class="w-12 h-12 bg-primary-500/10 rounded-xl flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">Job Tracking</h3>
+                    <p class="text-gray-400">Track jobs from scheduled to completed. Add notes, photos, and time tracking.</p>
+                </div>
+
+                <!-- Feature 4 -->
+                <div class="p-6 bg-dark-900 rounded-2xl border border-white/5 card-hover">
+                    <div class="w-12 h-12 bg-primary-500/10 rounded-xl flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">Email Notifications</h3>
+                    <p class="text-gray-400">Automatic booking confirmations, reminders, and status updates for customers and crews.</p>
+                </div>
+
+                <!-- Feature 5 -->
+                <div class="p-6 bg-dark-900 rounded-2xl border border-white/5 card-hover">
+                    <div class="w-12 h-12 bg-primary-500/10 rounded-xl flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">Mobile Optimized</h3>
+                    <p class="text-gray-400">Works perfectly on any device. Crews can view jobs and update status from the field.</p>
+                </div>
+
+                <!-- Feature 6 -->
+                <div class="p-6 bg-dark-900 rounded-2xl border border-white/5 card-hover">
+                    <div class="w-12 h-12 bg-primary-500/10 rounded-xl flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">Manager-Only Access</h3>
+                    <p class="text-gray-400">Pay for crew managers, not every technician. Crews access jobs via secure links.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section id="pricing" class="py-24">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl lg:text-4xl font-bold mb-4">Simple, Transparent Pricing</h2>
+                <p class="text-gray-400 text-lg">Start free, scale as you grow. No hidden fees.</p>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+                <!-- Free Plan -->
+                <div class="p-8 bg-dark-800 rounded-2xl border border-white/5">
+                    <h3 class="text-xl font-semibold mb-2">Free</h3>
+                    <div class="flex items-baseline gap-1 mb-4">
+                        <span class="text-4xl font-bold">$0</span>
+                        <span class="text-gray-400">/month</span>
+                    </div>
+
+                    <p class="text-gray-400 mb-6">Perfect for getting started</p>
+
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-center gap-3">
+                            <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            <span>1 Crew</span>
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            <span>10 Jobs/Tasks</span>
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            <span>Client Booking Portal</span>
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            <span>Email Notifications</span>
+                        </li>
+                    </ul>
+
+                    <a href="{waitlist_url}" class="block w-full py-3 text-center border border-white/20 rounded-lg font-medium hover:bg-white/5 transition">
+                        Get Started Free
+                    </a>
+                </div>
+
+                <!-- Starter Plan -->
+                <div class="p-8 bg-primary-500/10 rounded-2xl border border-primary-500/30 relative">
+                    <div class="absolute -top-4 left-1/2 -translate-x-1/2">
+                        <span class="px-4 py-1 bg-primary-500 text-white text-sm font-medium rounded-full">Popular</span>
+                    </div>
+
+                    <h3 class="text-xl font-semibold mb-2">Starter</h3>
+                    <div class="flex items-baseline gap-1 mb-4">
+                        <span class="text-4xl font-bold">$49</span>
+                        <span class="text-gray-400">/month</span>
+                    </div>
+
+                    <p class="text-gray-400 mb-6">For growing businesses</p>
+
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-center gap-3">
+                            <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            <span>5 Crews</span>
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            <span>Unlimited Jobs</span>
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            <span>Calendar View</span>
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            <span>Priority Support</span>
+                        </li>
+                    </ul>
+
+                    <a href="{waitlist_url}" class="block w-full py-3 text-center bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium transition">
+                        Join Waitlist
+                    </a>
+                </div>
+
+                <!-- Pro Plan -->
+                <div class="p-8 bg-dark-800 rounded-2xl border border-white/5">
+                    <h3 class="text-xl font-semibold mb-2">Pro</h3>
+                    <div class="flex items-baseline gap-1 mb-4">
+                        <span class="text-4xl font-bold">$99</span>
+                        <span class="text-gray-400">/month</span>
+                    </div>
+
+                    <p class="text-gray-400 mb-6">For established operations</p>
+
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-center gap-3">
+                            <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            <span>Unlimited Crews</span>
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            <span>Unlimited Jobs</span>
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            <span>Route Optimization</span>
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            <span>White-Label Options</span>
+                        </li>
+                    </ul>
+
+                    <a href="{waitlist_url}" class="block w-full py-3 text-center border border-white/20 rounded-lg font-medium hover:bg-white/5 transition">
+                        Join Waitlist
+                    </a>
+                </div>
+            </div>
+
+
+            <p class="text-center text-gray-500 mt-8">
+                Beta pricing: 50% off for the first 6 months
+            </p>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section id="faq" class="py-24 bg-dark-800">
+        <div class="max-w-3xl mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl lg:text-4xl font-bold mb-4">Frequently Asked Questions</h2>
+                <p class="text-gray-400">Everything you need to know about FieldPulse</p>
+            </div>
+
+            <div class="space-y-6">
+                <!-- FAQ 1 -->
+                <div class="p-6 bg-dark-900 rounded-xl border border-white/5">
+                    <h3 class="font-semibold mb-2">When will FieldPulse launch?</h3>
+                    <p class="text-gray-400">We're launching our beta in September 2026. Join the waitlist to get early access and lock in 50% off pricing for your first 6 months.</p>
+                </div>
+
+                <!-- FAQ 2 -->
+                <div class="p-6 bg-dark-900 rounded-xl border border-white/5">
+                    <h3 class="font-semibold mb-2">What industries is FieldPulse for?</h3>
+                    <p class="text-gray-400">FieldPulse is designed for any service business with crews in the field: landscaping, lawn care, HVAC, plumbing, electrical, cleaning services, general contracting, and more.</p>
+                </div>
+
+                <!-- FAQ 3 -->
+                <div class="p-6 bg-dark-900 rounded-xl border border-white/5">
+                    <h3 class="font-semibold mb-2">Do my crew members need to log in?</h3>
+                    <p class="text-gray-400">No! FieldPulse uses a unique manager-only access model. Crew managers log in to manage schedules, while crews access their assigned jobs via secure links or QR codes—no passwords required.</p>
+                </div>
+
+                <!-- FAQ 4 -->
+                <div class="p-6 bg-dark-900 rounded-xl border border-white/5">
+                    <h3 class="font-semibold mb-2">Can customers book appointments online?</h3>
+                    <p class="text-gray-400">Yes! Every FieldPulse account includes a client booking portal. Customers can see your availability and book directly. You can also integrate it into your existing website.</p>
+                </div>
+
+                <!-- FAQ 5 -->
+                <div class="p-6 bg-dark-900 rounded-xl border border-white/5">
+                    <h3 class="font-semibold mb-2">Is there a free trial?</h3>
+                    <p class="text-gray-400">Yes! Our Free tier includes 1 crew and up to 10 jobs—perfect for getting started. No credit card required. When you're ready to grow, upgrade to Starter or Pro.</p>
+                </div>
+
+                <!-- FAQ 6 -->
+                <div class="p-6 bg-dark-900 rounded-xl border border-white/5">
+                    <h3 class="font-semibold mb-2">Is FieldPulse available in my area?</h3>
+                    <p class="text-gray-400">We're starting with East Texas and will expand throughout Texas and beyond. Join the waitlist and let us know where you're located—we'll notify you when we launch in your area.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="py-24">
+        <div class="max-w-4xl mx-auto px-6 text-center">
+            <h2 class="text-3xl lg:text-5xl font-bold mb-6">Ready to streamline your field service operations?</h2>
+
+            <p class="text-xl text-gray-400 mb-10">Join the waitlist and be the first to try FieldPulse. Get 50% off your first 6 months as a beta user.</p>
+
+            <a href="{waitlist_url}" class="inline-flex items-center gap-2 px-8 py-4 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-xl transition shadow-lg shadow-primary-500/25">
+                Join the Waitlist
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                </svg>
+            </a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-12 border-t border-white/5">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-gradient-to-br from-primary-400 to-primary-600 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+
+                    <span class="font-semibold">FieldPulse</span>
+                </div>
+
+                <p class="text-gray-500">
+                    <a href="https://pineydigital.com" target="_blank" class="text-primary-400 hover:text-primary-300">A Product of Piney Digital</a>
+                </p>
+
+                <p class="text-gray-600 text-sm">© 2026 FieldPulse. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
+"""
+
 @app.route("/")
 def fieldpulse_redirect():
-    """Redirect to FieldPulse dashboard."""
-    return redirect(url_for("fieldpulse_dashboard"))
+    """Redirect to FieldPulse dashboard if logged in, otherwise show landing page."""
+    if session.get("fp_logged_in"):
+        return redirect(url_for("fieldpulse_dashboard"))
+
+    # Show landing page for visitors
+    clerk_pub_key = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
+    clerk_domain = "notable-turtle-45.clerk.accounts.dev"  # Your Clerk domain
+    waitlist_url = f"https://{clerk_domain}/waitlist"
+
+    return render_template_string(
+        LANDING_PAGE_TEMPLATE.format(waitlist_url=waitlist_url)
+    )
 
 
 @app.route("/login")
