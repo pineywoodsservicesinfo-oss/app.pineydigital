@@ -958,13 +958,13 @@ LANDING_PAGE_TEMPLATE = """
     </footer>
 
     <!-- Waitlist Modal -->
-    <div id="waitlist-modal" class="fixed inset-0 z-[60] hidden">
+    <div id="waitlist-modal" class="fixed inset-0 z-[60] hidden overflow-y-auto">
         <!-- Backdrop -->
-        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeWaitlistModal()"></div>
+        <div class="fixed inset-0 bg-black/60 backdrop-blur-sm" onclick="closeWaitlistModal()"></div>
 
         <!-- Modal Content -->
-        <div class="relative min-h-screen flex items-center justify-center p-4">
-            <div class="bg-dark-800 rounded-2xl border border-white/10 w-full max-w-md p-6 sm:p-8 shadow-2xl transform transition-all">
+        <div class="relative min-h-screen flex items-start sm:items-center justify-center p-4 py-8">
+            <div class="bg-dark-800 rounded-2xl border border-white/10 w-full max-w-md p-6 sm:p-8 shadow-2xl transform transition-all my-auto">
                 <!-- Header -->
                 <div class="text-center mb-6">
                     <div class="w-12 h-12 bg-gradient-to-br from-primary-400 to-primary-600 rounded-xl mx-auto mb-4 flex items-center justify-center">
