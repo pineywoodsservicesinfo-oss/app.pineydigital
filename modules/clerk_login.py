@@ -310,7 +310,7 @@ def render_clerk_login_page(clerk_pub_key: str, app_domain: str, tailwind_cdn: s
 
     Args:
         clerk_pub_key: Clerk publishable key (pk_test_... or pk_live_...)
-        app_domain: Your app's domain (e.g., https://fieldpulse-development.up.railway.app)
+        app_domain: Your app's domain (e.g., https://fieldpulse.pineydigital.com)
         tailwind_cdn: HTML for Tailwind CSS CDN
         custom_css: Your custom CSS styles
 
