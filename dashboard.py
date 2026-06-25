@@ -613,6 +613,26 @@ LANDING_PAGE_TEMPLATE = """
         </div>
     </nav>
 
+    <!-- Waitlist Success Confirmation -->
+    <div id="waitlist-confirmation" style="display: {show_confirmation};" class="fixed top-20 left-0 right-0 z-40 px-4">
+        <div class="max-w-4xl mx-auto">
+            <div class="bg-primary-500/10 border border-primary-500/30 rounded-2xl p-6 text-center backdrop-blur-sm">
+                <div class="flex items-center justify-center gap-3 mb-2">
+                    <div class="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-white">You're on the list!</h3>
+                </div>
+                <p class="text-gray-300">Thanks for joining the FieldPulse waitlist. We'll email you when beta access is ready.</p>
+                <button onclick="document.getElementById('waitlist-confirmation').style.display='none'" class="mt-4 text-primary-400 hover:text-primary-300 text-sm font-medium">
+                    Dismiss
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Hero Section -->
     <section class="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden">
         <div class="hero-glow"></div>
@@ -951,8 +971,14 @@ def fieldpulse_redirect():
     clerk_domain = "notable-turtle-45.accounts.dev"  # Your Clerk domain (no .clerk)
     waitlist_url = f"https://{clerk_domain}/waitlist"
 
+    # Check if user just joined waitlist (redirect from Clerk)
+    waitlist_success = request.args.get('waitlist') == 'success'
+
     return render_template_string(
-        LANDING_PAGE_TEMPLATE.format(waitlist_url=waitlist_url)
+        LANDING_PAGE_TEMPLATE.format(
+            waitlist_url=waitlist_url,
+            show_confirmation='block' if waitlist_success else 'none'
+        )
     )
 
 
