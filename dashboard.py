@@ -568,24 +568,24 @@ LANDING_PAGE_TEMPLATE = """
     <meta name="description" content="FieldPulse helps landscaping, HVAC, plumbing, and service businesses manage crews, schedule jobs, and delight customers.">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: { 50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#6ee7b7', 400: '#34d399', 500: '#10b981', 600: '#059669', 700: '#047857', 800: '#065f46', 900: '#064e3b' },
-                        dark: { 900: '#0f172a', 800: '#1e293b', 700: '#334155', 600: '#475569' }
-                    }
-                }
-            }
-        }
+        tailwind.config = {{
+            theme: {{
+                extend: {{
+                    colors: {{
+                        primary: {{ 50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#6ee7b7', 400: '#34d399', 500: '#10b981', 600: '#059669', 700: '#047857', 800: '#065f46', 900: '#064e3b' }},
+                        dark: {{ 900: '#0f172a', 800: '#1e293b', 700: '#334155', 600: '#475569' }}
+                    }}
+                }}
+            }}
+        }}
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        .gradient-text { background: linear-gradient(135deg, #10b981 0%, #059669 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .hero-glow { position: absolute; width: 600px; height: 600px; background: radial-gradient(circle, rgba(16,185,129,0.15) 0%, transparent 70%); border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }
-        .card-hover { transition: all 0.3s ease; }
-        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -15px rgba(16,185,129,0.2); }
+        body {{ font-family: 'Inter', sans-serif; }}
+        .gradient-text {{ background: linear-gradient(135deg, #10b981 0%, #059669 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }}
+        .hero-glow {{ position: absolute; width: 600px; height: 600px; background: radial-gradient(circle, rgba(16,185,129,0.15) 0%, transparent 70%); border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }}
+        .card-hover {{ transition: all 0.3s ease; }}
+        .card-hover:hover {{ transform: translateY(-4px); box-shadow: 0 20px 40px -15px rgba(16,185,129,0.2); }}
     </style>
 </head>
 <body class="bg-dark-900 text-white antialiased">
