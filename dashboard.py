@@ -1729,6 +1729,12 @@ def fieldpulse_dashboard():
     user = query_db("SELECT photo_url FROM users WHERE id = %s", (user_id,), one=True)
     photo_url = user.get('photo_url', '') if user else ''
 
+    # Build avatar HTML
+    if photo_url:
+        avatar_html = f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover">'
+    else:
+        avatar_html = user_name[:1].upper()
+
     # Get status filter from query params
     status_filter = request.args.get('status', 'all')
 
@@ -1871,7 +1877,7 @@ def fieldpulse_dashboard():
             <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
                 <a href="/profile" class="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-slate-800 transition group">
                     <div class="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-sm font-medium text-white overflow-hidden">
-                        {f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover" onerror="this.style.display=\'none\'; this.parentElement.innerText=\'{user_name[:1].upper()}\';">' if photo_url else user_name[:1].upper()}
+                        {avatar_html}
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-white truncate group-hover:text-emerald-400 transition">{user_name}</p>
@@ -2123,14 +2129,22 @@ def fieldpulse_profile():
                 error = "No photo provided"
 
     # Get profile photo URL
-    photo_url = user.get('photo_url', '')
+    photo_url = user.get('photo_url', '') if user else ''
+    logger.info(f"Profile page - user_id: {user_id}, photo_url: {photo_url}")
+
+    # Build profile photo HTML
+    if photo_url:
+        avatar_html = f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover">'
+    else:
+        avatar_html = user_name[:1].upper()
+
     profile_photo_html = f"""
     <div class="flex items-center gap-6">
         <div class="relative">
             <div class="w-24 h-24 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-3xl font-bold text-white overflow-hidden">
-                {f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover" onerror="this.style.display=\'none\'; this.parentElement.innerText=\'{user_name[:1].upper()}\';">' if photo_url else user_name[:1].upper()}
+                {avatar_html}
             </div>
-            {f'<!-- Debug: photo_url={photo_url} -->' if photo_url else ''}
+            <!-- Debug: photo_url={photo_url} -->
             <label for="photo-upload" class="absolute -bottom-2 -right-2 w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-full flex items-center justify-center cursor-pointer transition border-2 border-slate-800">
                 <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
@@ -2245,7 +2259,7 @@ def fieldpulse_profile():
             <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
                 <a href="/profile" class="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-slate-800 transition group">
                     <div class="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-sm font-medium text-white overflow-hidden">
-                        {f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover" onerror="this.style.display=\'none\'; this.parentElement.innerText=\'{user_name[:1].upper()}\';">' if photo_url else user_name[:1].upper()}
+                        {avatar_html}
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-white truncate group-hover:text-emerald-400 transition">{user_name}</p>
@@ -3764,6 +3778,12 @@ def fieldpulse_job_detail(job_id):
     user = query_db("SELECT photo_url FROM users WHERE id = %s", (user_id,), one=True)
     photo_url = user.get('photo_url', '') if user else ''
 
+    # Build avatar HTML
+    if photo_url:
+        avatar_html = f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover">'
+    else:
+        avatar_html = user_name[:1].upper()
+
     # Get job details
     job = query_db(
         "SELECT j.*, c.name as crew_name FROM jobs j LEFT JOIN crews c ON j.crew_id = c.id WHERE j.id = %s AND j.business_id = %s",
@@ -4327,6 +4347,12 @@ def fieldpulse_crews():
     user = query_db("SELECT photo_url FROM users WHERE id = %s", (user_id,), one=True)
     photo_url = user.get('photo_url', '') if user else ''
 
+    # Build avatar HTML
+    if photo_url:
+        avatar_html = f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover">'
+    else:
+        avatar_html = user_name[:1].upper()
+
     # Get all crews for this business
     crews = query_db(
         """SELECT c.*,
@@ -4444,7 +4470,7 @@ def fieldpulse_crews():
             <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
                 <div class="flex items-center gap-3 px-4 py-2">
                     <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium overflow-hidden">
-                        {f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover" onerror="this.style.display=\'none\'; this.parentElement.innerText=\'{user_name[:1].upper()}\';">' if photo_url else user_name[:1].upper()}
+                        {avatar_html}
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-white truncate">{user_name}</p>
@@ -4512,6 +4538,12 @@ def fieldpulse_crew_new():
     # Get user's photo
     user = query_db("SELECT photo_url FROM users WHERE id = %s", (user_id,), one=True)
     photo_url = user.get('photo_url', '') if user else ''
+
+    # Build avatar HTML
+    if photo_url:
+        avatar_html = f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover">'
+    else:
+        avatar_html = user_name[:1].upper()
 
     error = None
 
@@ -4607,7 +4639,7 @@ def fieldpulse_crew_new():
             <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
                 <div class="flex items-center gap-3 px-4 py-2">
                     <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium overflow-hidden">
-                        {f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover" onerror="this.style.display=\'none\'; this.parentElement.innerText=\'{user_name[:1].upper()}\';">' if photo_url else user_name[:1].upper()}
+                        {avatar_html}
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-white truncate">{user_name}</p>
@@ -4705,6 +4737,12 @@ def fieldpulse_crew_edit(crew_id):
     # Get user's photo
     user = query_db("SELECT photo_url FROM users WHERE id = %s", (user_id,), one=True)
     photo_url = user.get('photo_url', '') if user else ''
+
+    # Build avatar HTML
+    if photo_url:
+        avatar_html = f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover">'
+    else:
+        avatar_html = user_name[:1].upper()
 
     error = None
 
@@ -4820,7 +4858,7 @@ def fieldpulse_crew_edit(crew_id):
             <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
                 <div class="flex items-center gap-3 px-4 py-2">
                     <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium overflow-hidden">
-                        {f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover" onerror="this.style.display=\'none\'; this.parentElement.innerText=\'{user_name[:1].upper()}\';">' if photo_url else user_name[:1].upper()}
+                        {avatar_html}
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-white truncate">{user_name}</p>
