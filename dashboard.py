@@ -4422,8 +4422,6 @@ def fieldpulse_crew_edit(crew_id):
                 {f'<div class="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400">{error}</div>' if error else ''}
 
                 <form method="POST" class="bg-slate-800 rounded-xl border border-slate-700 p-6 space-y-6">
-                    <input type="hidden" name="action" value="update">
-
                     <div>
                         <label class="block text-sm font-medium text-slate-300 mb-2">Crew Name *</label>
                         <input type="text" name="name" value="{crew.get('name', '')}" required
@@ -4473,7 +4471,7 @@ def fieldpulse_crew_edit(crew_id):
                         </button>
                         <div class="flex gap-3">
                             <a href="/crews" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition">Cancel</a>
-                            <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition">Save Changes</button>
+                            <button type="submit" name="action" value="update" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition">Save Changes</button>
                         </div>
                     </div>
                 </form>
