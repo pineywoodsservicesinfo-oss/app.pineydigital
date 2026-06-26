@@ -164,6 +164,20 @@ app.register_blueprint(referrals_bp)
 
 
 # ═════════════════════════════════════════════════════════════════
+# CACHE HELPERS
+# ═════════════════════════════════════════════════════════════════
+
+_cache_store = {}
+
+def invalidate_cache(key_pattern):
+    """Invalidate cached data by key pattern."""
+    global _cache_store
+    keys_to_delete = [k for k in _cache_store.keys() if key_pattern in k]
+    for k in keys_to_delete:
+        del _cache_store[k]
+
+
+# ═════════════════════════════════════════════════════════════════
 # DATABASE HELPERS
 # ═════════════════════════════════════════════════════════════════
 
