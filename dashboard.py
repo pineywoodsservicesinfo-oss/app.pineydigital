@@ -1988,6 +1988,331 @@ def fieldpulse_dashboard():
 </html>""")
 
 
+@app.route("/profile", methods=["GET", "POST"])
+@fp_login_required
+def fieldpulse_profile():
+    """User profile settings page."""
+    business = get_business_from_session()
+    if not business:
+        return redirect(url_for("fieldpulse_logout"))
+
+    business_id = business["id"]
+    user_id = session.get("fp_user_id")
+    user_name = session.get("fp_user_name", "User")
+    error = None
+    success = None
+
+    # Get current user data
+    user = query_db(
+        "SELECT * FROM users WHERE id = %s AND business_id = %s",
+        (user_id, business_id),
+        one=True
+    )
+
+    if not user:
+        return redirect(url_for("fieldpulse_logout"))
+
+    if request.method == "POST":
+        action = request.form.get("action", "")
+
+        if action == "update_profile":
+            name = request.form.get("name", "").strip()
+            email = request.form.get("email", "").strip().lower()
+            phone = request.form.get("phone", "").strip()
+
+            if not name:
+                error = "Name is required"
+            elif not email or "@" not in email:
+                error = "Valid email is required"
+            else:
+                # Check if email is already taken by another user
+                existing = query_db(
+                    "SELECT id FROM users WHERE email = %s AND id != %s",
+                    (email, user_id),
+                    one=True
+                )
+                if existing:
+                    error = "Email is already in use by another user"
+                else:
+                    query_db("""
+                        UPDATE users SET name = %s, email = %s, phone = %s, updated_at = NOW()
+                        WHERE id = %s AND business_id = %s
+                    """, (name, email, phone or None, user_id, business_id))
+
+                    # Update session
+                    session["fp_user_name"] = name
+                    success = "Profile updated successfully"
+
+                    # Refresh user data
+                    user = query_db(
+                        "SELECT * FROM users WHERE id = %s",
+                        (user_id,),
+                        one=True
+                    )
+
+        elif action == "update_password":
+            current_password = request.form.get("current_password", "")
+            new_password = request.form.get("new_password", "")
+            confirm_password = request.form.get("confirm_password", "")
+
+            if not current_password or not new_password:
+                error = "All password fields are required"
+            elif new_password != confirm_password:
+                error = "New passwords do not match"
+            elif len(new_password) < 8:
+                error = "Password must be at least 8 characters"
+            else:
+                # Verify current password (only for legacy auth users)
+                from modules.security import verify_password, hash_password
+
+                if user.get("password_hash") and verify_password(current_password, user["password_hash"]):
+                    new_hash = hash_password(new_password)
+                    query_db("""
+                        UPDATE users SET password_hash = %s, updated_at = NOW()
+                        WHERE id = %s AND business_id = %s
+                    """, (new_hash, user_id, business_id))
+                    success = "Password updated successfully"
+                else:
+                    error = "Current password is incorrect"
+
+    # Password form HTML for legacy auth users
+    password_form_html = """
+    <form method="POST" class="space-y-4">
+        <input type="hidden" name="action" value="update_password">
+
+        <div>
+            <label class="block text-sm font-medium text-slate-300 mb-2">Current Password</label>
+            <input type="password" name="current_password" required
+                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                placeholder="Enter your current password">
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-300 mb-2">New Password</label>
+                <input type="password" name="new_password" required minlength="8"
+                    class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    placeholder="At least 8 characters">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-slate-300 mb-2">Confirm New Password</label>
+                <input type="password" name="confirm_password" required minlength="8"
+                    class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    placeholder="Re-enter new password">
+            </div>
+        </div>
+
+        <div class="pt-4 border-t border-slate-700">
+            <button type="submit" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition">
+                Update Password
+            </button>
+        </div>
+    </form>
+    """
+
+    clerk_message_html = """
+    <div class="text-slate-400 text-sm">
+        <p>Your account uses Clerk authentication. Password management is handled through Clerk.</p>
+        <p class="mt-2">To change your password, please use the Clerk account settings.</p>
+    </div>
+    """
+
+    return render_template_string(f"""<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldPulse — Profile Settings</title>
+    {TAILWIND_CDN}
+    {FIELD_PULSE_CSS}
+</head>
+<body class="bg-slate-900 text-white">
+    <div class="flex min-h-screen">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-slate-950 border-r border-slate-800 fixed h-full">
+            <div class="p-6">
+                <div class="flex items-center gap-3 mb-8">
+                    <div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg">FieldPulse</h1>
+                        <p class="text-xs text-slate-500">{business.get('name', 'Business')}</p>
+                    </div>
+                </div>
+
+                <nav class="space-y-1">
+                    <a href="/dashboard" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+                        </svg>
+                        Dashboard
+                    </a>
+                    <a href="/jobs" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                        Jobs
+                    </a>
+                    <a href="#" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        Schedule
+                    </a>
+                    <a href="/crews" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        Crews
+                    </a>
+                </nav>
+            </div>
+
+            <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
+                <div class="flex items-center gap-3 px-4 py-2">
+                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium">
+                        {user_name[:1].upper()}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-white truncate">{user_name}</p>
+                        <p class="text-xs text-slate-500 truncate">{business.get('subscription_tier', 'Starter').title()} Plan</p>
+                    </div>
+                    <a href="/logout" class="text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 ml-64">
+            <header class="bg-slate-900 border-b border-slate-800 px-8 py-4 sticky top-0 z-10">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xl font-semibold">Profile Settings</h2>
+                    <a href="/dashboard" class="text-slate-400 hover:text-white flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                        </svg>
+                        Back to Dashboard
+                    </a>
+                </div>
+            </header>
+
+            <div class="p-8 max-w-3xl">
+                {f'<div class="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400">{success}</div>' if success else ''}
+                {f'<div class="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400">{error}</div>' if error else ''}
+
+                <!-- Profile Info Section -->
+                <div class="bg-slate-800 rounded-xl border border-slate-700 p-6 mb-6">
+                    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                        </svg>
+                        Personal Information
+                    </h3>
+
+                    <form method="POST" class="space-y-4">
+                        <input type="hidden" name="action" value="update_profile">
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Full Name *</label>
+                                <input type="text" name="name" value="{escape(user.get('name', ''))}" required
+                                    class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                    placeholder="Your full name">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Email Address *</label>
+                                <input type="email" name="email" value="{escape(user.get('email', ''))}" required
+                                    class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                    placeholder="you@example.com">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Phone Number</label>
+                            <input type="tel" name="phone" value="{escape(user.get('phone', '') or '')}"
+                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                placeholder="(555) 123-4567">
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Role</label>
+                                <input type="text" value="{escape(user.get('role', 'Owner'))}" disabled
+                                    class="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-lg text-slate-400 cursor-not-allowed">
+                                <p class="text-xs text-slate-500 mt-1">Role can only be changed by an administrator</p>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Business</label>
+                                <input type="text" value="{escape(business.get('name', ''))}" disabled
+                                    class="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-lg text-slate-400 cursor-not-allowed">
+                            </div>
+                        </div>
+
+                        <div class="pt-4 border-t border-slate-700">
+                            <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition">
+                                Save Changes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Change Password Section (Legacy auth only) -->
+                <div class="bg-slate-800 rounded-xl border border-slate-700 p-6 mb-6">
+                    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                        </svg>
+                        Change Password
+                    </h3>
+
+                    {password_form_html if user.get('password_hash') else clerk_message_html}
+                </div>
+
+                <!-- Account Info Section -->
+                <div class="bg-slate-800 rounded-xl border border-slate-700 p-6">
+                    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        Account Information
+                    </h3>
+
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between py-2 border-b border-slate-700">
+                            <span class="text-slate-400">Account ID</span>
+                            <span class="text-slate-300 font-mono">{user.get('id', 'N/A')[:8]}...</span>
+                        </div>
+                        <div class="flex justify-between py-2 border-b border-slate-700">
+                            <span class="text-slate-400">Member Since</span>
+                            <span class="text-slate-300">{user.get('created_at', 'N/A')}</span>
+                        </div>
+                        <div class="flex justify-between py-2 border-b border-slate-700">
+                            <span class="text-slate-400">Last Updated</span>
+                            <span class="text-slate-300">{user.get('updated_at', 'N/A')}</span>
+                        </div>
+                        <div class="flex justify-between py-2">
+                            <span class="text-slate-400">Authentication</span>
+                            <span class="text-slate-300">{user.get('clerk_user_id') and 'Clerk' or 'Legacy'}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>""")
+
+
 @app.route("/logout")
 def fieldpulse_logout():
     """Logout from FieldPulse - handles both Clerk and legacy session auth."""
