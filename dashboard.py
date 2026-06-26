@@ -4321,6 +4321,11 @@ def fieldpulse_crews():
 
     business_id = business["id"]
     user_name = session.get("fp_user_name", "User")
+    user_id = session.get("fp_user_id")
+
+    # Get user's photo
+    user = query_db("SELECT photo_url FROM users WHERE id = %s", (user_id,), one=True)
+    photo_url = user.get('photo_url', '') if user else ''
 
     # Get all crews for this business
     crews = query_db(
