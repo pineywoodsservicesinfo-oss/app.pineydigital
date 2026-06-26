@@ -1729,9 +1729,15 @@ def fieldpulse_dashboard():
     user = query_db("SELECT photo_url FROM users WHERE id = %s", (user_id,), one=True)
     photo_url = user.get('photo_url', '') if user else ''
 
-    # Build avatar HTML
+    # Build avatar HTML (with URL validation to prevent XSS)
     if photo_url:
-        avatar_html = f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover">'
+        # Validate photo_url is HTTP/HTTPS only
+        if photo_url.startswith(('http://', 'https://')):
+            from markupsafe import escape
+            safe_url = escape(photo_url)
+            avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
+        else:
+            avatar_html = user_name[:1].upper()
     else:
         avatar_html = user_name[:1].upper()
 
@@ -2287,8 +2293,8 @@ def fieldpulse_profile():
             </header>
 
             <div class="p-8 max-w-3xl">
-                {f'<div class="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400">{success}</div>' if success else ''}
-                {f'<div class="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400">{error}</div>' if error else ''}
+                {f'<div class="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400">{escape(success)}</div>' if success else ''}
+                {f'<div class="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400">{escape(error)}</div>' if error else ''}
 
                 <!-- Profile Photo Section -->
                 <div class="bg-slate-800 rounded-xl border border-slate-700 p-6 mb-6">
@@ -3107,6 +3113,7 @@ def fieldpulse_jobs():
         return redirect(url_for("fieldpulse_logout"))
 
     business_id = business['id']
+    user_name = session.get("fp_user_name", "User")
     status_filter = request.args.get("status", "")
 
     # Get jobs with optional status filter
@@ -3215,7 +3222,34 @@ def fieldpulse_jobs():
                         </svg>
                         Jobs
                     </a>
+                    <a href="#" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white opacity-60 cursor-not-allowed" title="Coming soon">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        Schedule
+                    </a>
+                    <a href="/crews" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        Crews
+                    </a>
                 </nav>
+            </div>
+
+            <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
+                <a href="/profile" class="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-slate-800 transition group">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-sm font-medium text-white overflow-hidden">
+                        {user_name[:1].upper()}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-white truncate group-hover:text-emerald-400 transition">{user_name}</p>
+                        <p class="text-xs text-slate-500 truncate">{business.get('subscription_tier', 'Starter').title()} Plan</p>
+                    </div>
+                    <svg class="w-4 h-4 text-slate-500 group-hover:text-white transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
             </div>
         </aside>
 
@@ -3778,9 +3812,15 @@ def fieldpulse_job_detail(job_id):
     user = query_db("SELECT photo_url FROM users WHERE id = %s", (user_id,), one=True)
     photo_url = user.get('photo_url', '') if user else ''
 
-    # Build avatar HTML
+    # Build avatar HTML (with URL validation to prevent XSS)
     if photo_url:
-        avatar_html = f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover">'
+        # Validate photo_url is HTTP/HTTPS only
+        if photo_url.startswith(('http://', 'https://')):
+            from markupsafe import escape
+            safe_url = escape(photo_url)
+            avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
+        else:
+            avatar_html = user_name[:1].upper()
     else:
         avatar_html = user_name[:1].upper()
 
@@ -4111,7 +4151,34 @@ def fieldpulse_job_detail(job_id):
                         </svg>
                         Jobs
                     </a>
+                    <a href="#" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white opacity-60 cursor-not-allowed" title="Coming soon">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        Schedule
+                    </a>
+                    <a href="/crews" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        Crews
+                    </a>
                 </nav>
+            </div>
+
+            <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
+                <a href="/profile" class="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-slate-800 transition group">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-sm font-medium text-white overflow-hidden">
+                        {avatar_html}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-white truncate group-hover:text-emerald-400 transition">{user_name}</p>
+                        <p class="text-xs text-slate-500 truncate">{business.get('subscription_tier', 'Starter').title()} Plan</p>
+                    </div>
+                    <svg class="w-4 h-4 text-slate-500 group-hover:text-white transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
             </div>
         </aside>
 
@@ -4347,9 +4414,15 @@ def fieldpulse_crews():
     user = query_db("SELECT photo_url FROM users WHERE id = %s", (user_id,), one=True)
     photo_url = user.get('photo_url', '') if user else ''
 
-    # Build avatar HTML
+    # Build avatar HTML (with URL validation to prevent XSS)
     if photo_url:
-        avatar_html = f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover">'
+        # Validate photo_url is HTTP/HTTPS only
+        if photo_url.startswith(('http://', 'https://')):
+            from markupsafe import escape
+            safe_url = escape(photo_url)
+            avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
+        else:
+            avatar_html = user_name[:1].upper()
     else:
         avatar_html = user_name[:1].upper()
 
@@ -4539,9 +4612,15 @@ def fieldpulse_crew_new():
     user = query_db("SELECT photo_url FROM users WHERE id = %s", (user_id,), one=True)
     photo_url = user.get('photo_url', '') if user else ''
 
-    # Build avatar HTML
+    # Build avatar HTML (with URL validation to prevent XSS)
     if photo_url:
-        avatar_html = f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover">'
+        # Validate photo_url is HTTP/HTTPS only
+        if photo_url.startswith(('http://', 'https://')):
+            from markupsafe import escape
+            safe_url = escape(photo_url)
+            avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
+        else:
+            avatar_html = user_name[:1].upper()
     else:
         avatar_html = user_name[:1].upper()
 
@@ -4738,9 +4817,15 @@ def fieldpulse_crew_edit(crew_id):
     user = query_db("SELECT photo_url FROM users WHERE id = %s", (user_id,), one=True)
     photo_url = user.get('photo_url', '') if user else ''
 
-    # Build avatar HTML
+    # Build avatar HTML (with URL validation to prevent XSS)
     if photo_url:
-        avatar_html = f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover">'
+        # Validate photo_url is HTTP/HTTPS only
+        if photo_url.startswith(('http://', 'https://')):
+            from markupsafe import escape
+            safe_url = escape(photo_url)
+            avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
+        else:
+            avatar_html = user_name[:1].upper()
     else:
         avatar_html = user_name[:1].upper()
 
