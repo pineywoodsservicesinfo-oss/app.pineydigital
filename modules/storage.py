@@ -1,5 +1,6 @@
 """Object Storage (S3) utilities for Railway."""
 
+import json
 import os
 import uuid
 import boto3
@@ -56,6 +57,9 @@ def upload_file(file_data, filename, content_type='application/octet-stream', fo
     unique_name = f"{folder}/{uuid.uuid4().hex[:16]}.{file_ext}" if file_ext else f"{folder}/{uuid.uuid4().hex[:16]}"
 
     try:
+        # Ensure bucket policy allows public access
+        ensure_bucket_public()
+
         # Upload with public-read ACL
         s3.put_object(
             Bucket=S3_BUCKET_NAME,
@@ -66,8 +70,9 @@ def upload_file(file_data, filename, content_type='application/octet-stream', fo
         )
 
         # Construct public URL
-        # Railway uses path-style URLs: https://endpoint/bucket-name/key
-        public_url = f"{S3_ENDPOINT_URL}/{S3_BUCKET_NAME}/{unique_name}"
+        # Tigris/Railway uses virtual-hosted style: https://bucket-name.endpoint/key
+        endpoint = S3_ENDPOINT_URL.replace('https://', '').replace('http://', '')
+        public_url = f"https://{S3_BUCKET_NAME}.{endpoint}/{unique_name}"
         logger.info(f"File uploaded successfully: {public_url}")
         return public_url
 
@@ -114,6 +119,40 @@ def delete_file(file_url):
 def is_configured():
     """Check if S3 storage is properly configured."""
     return all([S3_BUCKET_NAME, S3_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY])
+
+def ensure_bucket_public():
+    """Ensure bucket policy allows public read access."""
+    if not S3_BUCKET_NAME:
+        return False
+
+    s3 = get_s3_client()
+    if not s3:
+        return False
+
+    try:
+        # Set bucket policy to allow public read
+        policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Sid": "PublicReadGetObject",
+                    "Effect": "Allow",
+                    "Principal": "*",
+                    "Action": "s3:GetObject",
+                    "Resource": f"arn:aws:s3:::{S3_BUCKET_NAME}/*"
+                }
+            ]
+        }
+
+        s3.put_bucket_policy(
+            Bucket=S3_BUCKET_NAME,
+            Policy=json.dumps(policy)
+        )
+        logger.info(f"Bucket policy updated for {S3_BUCKET_NAME}")
+        return True
+    except Exception as e:
+        logger.warning(f"Could not set bucket policy: {e}")
+        return False
 
 def get_presigned_url(file_url, expiration=3600):
     """Generate a presigned URL for temporary access to a private object.
