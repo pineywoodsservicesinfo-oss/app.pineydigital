@@ -2081,8 +2081,15 @@ def fieldpulse_profile():
                     try:
                         from modules.storage import upload_file
 
-                        # Upload to S3
-                        file_url = upload_file(photo, folder="profile-photos")
+                        # Read file content and upload to S3
+                        file_content = photo.read()
+                        content_type = photo.content_type or 'image/jpeg'
+                        file_url = upload_file(
+                            file_content,
+                            filename=photo.filename,
+                            content_type=content_type,
+                            folder="profile-photos"
+                        )
 
                         if file_url:
                             # Update user record with photo URL
