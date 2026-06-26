@@ -1723,6 +1723,11 @@ def fieldpulse_dashboard():
     business_id = business['id']
     stats, recent_jobs, crews = get_dashboard_data(business_id)
     user_name = session.get("fp_user_name", "User")
+    user_id = session.get("fp_user_id")
+
+    # Get user's photo
+    user = query_db("SELECT photo_url FROM users WHERE id = %s", (user_id,), one=True)
+    photo_url = user.get('photo_url', '') if user else ''
 
     # Get status filter from query params
     status_filter = request.args.get('status', 'all')
@@ -1865,8 +1870,8 @@ def fieldpulse_dashboard():
 
             <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
                 <a href="/profile" class="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-slate-800 transition group">
-                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-sm font-medium text-white">
-                        {user_name[:1].upper()}
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-sm font-medium text-white overflow-hidden">
+                        {f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover">' if photo_url else user_name[:1].upper()}
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-white truncate group-hover:text-emerald-400 transition">{user_name}</p>
@@ -2237,8 +2242,8 @@ def fieldpulse_profile():
 
             <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
                 <a href="/profile" class="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-slate-800 transition group">
-                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-sm font-medium text-white">
-                        {user_name[:1].upper()}
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-sm font-medium text-white overflow-hidden">
+                        {f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover">' if photo_url else user_name[:1].upper()}
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-white truncate group-hover:text-emerald-400 transition">{user_name}</p>
@@ -3751,6 +3756,11 @@ def fieldpulse_job_detail(job_id):
     error = ""
     success = ""
     user_name = session.get("fp_user_name", "User")
+    user_id = session.get("fp_user_id")
+
+    # Get user's photo
+    user = query_db("SELECT photo_url FROM users WHERE id = %s", (user_id,), one=True)
+    photo_url = user.get('photo_url', '') if user else ''
 
     # Get job details
     job = query_db(
@@ -4426,8 +4436,8 @@ def fieldpulse_crews():
 
             <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
                 <div class="flex items-center gap-3 px-4 py-2">
-                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium">
-                        {user_name[:1].upper()}
+                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium overflow-hidden">
+                        {f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover">' if photo_url else user_name[:1].upper()}
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-white truncate">{user_name}</p>
@@ -4490,6 +4500,12 @@ def fieldpulse_crew_new():
 
     business_id = business["id"]
     user_name = session.get("fp_user_name", "User")
+    user_id = session.get("fp_user_id")
+
+    # Get user's photo
+    user = query_db("SELECT photo_url FROM users WHERE id = %s", (user_id,), one=True)
+    photo_url = user.get('photo_url', '') if user else ''
+
     error = None
 
     color_options = [
@@ -4583,8 +4599,8 @@ def fieldpulse_crew_new():
 
             <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
                 <div class="flex items-center gap-3 px-4 py-2">
-                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium">
-                        {user_name[:1].upper()}
+                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium overflow-hidden">
+                        {f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover">' if photo_url else user_name[:1].upper()}
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-white truncate">{user_name}</p>
@@ -4677,6 +4693,12 @@ def fieldpulse_crew_edit(crew_id):
 
     business_id = business["id"]
     user_name = session.get("fp_user_name", "User")
+    user_id = session.get("fp_user_id")
+
+    # Get user's photo
+    user = query_db("SELECT photo_url FROM users WHERE id = %s", (user_id,), one=True)
+    photo_url = user.get('photo_url', '') if user else ''
+
     error = None
 
     # Get crew details
@@ -4790,8 +4812,8 @@ def fieldpulse_crew_edit(crew_id):
 
             <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
                 <div class="flex items-center gap-3 px-4 py-2">
-                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium">
-                        {user_name[:1].upper()}
+                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium overflow-hidden">
+                        {f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover">' if photo_url else user_name[:1].upper()}
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-white truncate">{user_name}</p>
