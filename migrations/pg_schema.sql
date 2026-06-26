@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS users (
 
     -- Profile
     name            VARCHAR(255),
+    phone           VARCHAR(50),
+    photo_url       TEXT,
     role            VARCHAR(50) DEFAULT 'owner',  -- owner/admin/staff/customer
 
     -- Verification
