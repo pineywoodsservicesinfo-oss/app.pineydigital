@@ -1864,20 +1864,18 @@ def fieldpulse_dashboard():
             </div>
 
             <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
-                <div class="flex items-center gap-3 px-4 py-2">
-                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium">
+                <a href="/profile" class="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-slate-800 transition group">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-sm font-medium text-white">
                         {user_name[:1].upper()}
                     </div>
                     <div class="flex-1 min-w-0">
-                        <p class="text-sm font-medium text-white truncate">{user_name}</p>
+                        <p class="text-sm font-medium text-white truncate group-hover:text-emerald-400 transition">{user_name}</p>
                         <p class="text-xs text-slate-500 truncate">{business.get('subscription_tier', 'Starter').title()} Plan</p>
                     </div>
-                    <a href="/logout" class="text-slate-400 hover:text-white">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-                        </svg>
-                    </a>
-                </div>
+                    <svg class="w-4 h-4 text-slate-500 group-hover:text-white transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
             </div>
         </aside>
 
@@ -2075,6 +2073,64 @@ def fieldpulse_profile():
                 else:
                     error = "Current password is incorrect"
 
+        elif action == "upload_photo":
+            # Handle profile photo upload
+            if 'photo' in request.files:
+                photo = request.files['photo']
+                if photo and photo.filename:
+                    try:
+                        from modules.storage import upload_file
+
+                        # Upload to S3
+                        file_url = upload_file(photo, folder="profile-photos")
+
+                        if file_url:
+                            # Update user record with photo URL
+                            query_db("""
+                                UPDATE users SET photo_url = %s, updated_at = NOW()
+                                WHERE id = %s AND business_id = %s
+                            """, (file_url, user_id, business_id))
+
+                            success = "Profile photo updated successfully"
+
+                            # Refresh user data
+                            user = query_db(
+                                "SELECT * FROM users WHERE id = %s",
+                                (user_id,),
+                                one=True
+                            )
+                        else:
+                            error = "Failed to upload photo"
+                    except Exception as e:
+                        logger.error(f"Failed to upload profile photo: {e}")
+                        error = "Failed to upload photo. Please try again."
+                else:
+                    error = "Please select a photo to upload"
+            else:
+                error = "No photo provided"
+
+    # Get profile photo URL
+    photo_url = user.get('photo_url', '')
+    profile_photo_html = f"""
+    <div class="flex items-center gap-6">
+        <div class="relative">
+            <div class="w-24 h-24 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-3xl font-bold text-white overflow-hidden">
+                {f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover">' if photo_url else user_name[:1].upper()}
+            </div>
+            <label for="photo-upload" class="absolute -bottom-2 -right-2 w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-full flex items-center justify-center cursor-pointer transition border-2 border-slate-800">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+            </label>
+        </div>
+        <div>
+            <h4 class="font-medium text-white">Profile Photo</h4>
+            <p class="text-sm text-slate-400">JPG, PNG or GIF. Max 5MB.</p>
+        </div>
+    </div>
+    """
+
     # Password form HTML for legacy auth users
     password_form_html = """
     <form method="POST" class="space-y-4">
@@ -2173,20 +2229,18 @@ def fieldpulse_profile():
             </div>
 
             <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
-                <div class="flex items-center gap-3 px-4 py-2">
-                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium">
+                <a href="/profile" class="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-slate-800 transition group">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-sm font-medium text-white">
                         {user_name[:1].upper()}
                     </div>
                     <div class="flex-1 min-w-0">
-                        <p class="text-sm font-medium text-white truncate">{user_name}</p>
+                        <p class="text-sm font-medium text-white truncate group-hover:text-emerald-400 transition">{user_name}</p>
                         <p class="text-xs text-slate-500 truncate">{business.get('subscription_tier', 'Starter').title()} Plan</p>
                     </div>
-                    <a href="/logout" class="text-slate-400 hover:text-white">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-                        </svg>
-                    </a>
-                </div>
+                    <svg class="w-4 h-4 text-slate-500 group-hover:text-white transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
             </div>
         </aside>
 
@@ -2207,6 +2261,22 @@ def fieldpulse_profile():
             <div class="p-8 max-w-3xl">
                 {f'<div class="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400">{success}</div>' if success else ''}
                 {f'<div class="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400">{error}</div>' if error else ''}
+
+                <!-- Profile Photo Section -->
+                <div class="bg-slate-800 rounded-xl border border-slate-700 p-6 mb-6">
+                    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        Profile Photo
+                    </h3>
+
+                    <form method="POST" enctype="multipart/form-data" class="space-y-4">
+                        <input type="hidden" name="action" value="upload_photo">
+                        {profile_photo_html}
+                        <input type="file" id="photo-upload" name="photo" accept="image/*" class="hidden" onchange="this.form.submit()">
+                    </form>
+                </div>
 
                 <!-- Profile Info Section -->
                 <div class="bg-slate-800 rounded-xl border border-slate-700 p-6 mb-6">
