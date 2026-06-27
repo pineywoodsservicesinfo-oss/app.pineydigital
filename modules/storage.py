@@ -186,6 +186,39 @@ def get_presigned_url(file_url, expiration=3600):
         logger.error(f"Error generating presigned URL: {e}")
         return file_url
 
+def get_file(file_url):
+    """Get a file from S3 and return (content, content_type).
+
+    Args:
+        file_url: Full S3 URL of the file
+
+    Returns:
+        Tuple of (bytes, content_type) or (None, None) if failed
+    """
+    if not S3_BUCKET_NAME or not file_url:
+        return None, None
+
+    s3 = get_s3_client()
+    if not s3:
+        return None, None
+
+    try:
+        # Extract key from URL
+        prefix = f"{S3_ENDPOINT_URL}/{S3_BUCKET_NAME}/"
+        if file_url.startswith(prefix):
+            key = file_url[len(prefix):]
+        else:
+            key = file_url.split(f"/{S3_BUCKET_NAME}/")[-1]
+
+        response = s3.get_object(Bucket=S3_BUCKET_NAME, Key=key)
+        content = response['Body'].read()
+        content_type = response.get('ContentType', 'application/octet-stream')
+        return content, content_type
+    except Exception as e:
+        logger.error(f"Error getting file: {e}")
+        return None, None
+
+
 def make_bucket_public():
     """Make all existing objects public using put_object_acl."""
     if not S3_BUCKET_NAME:

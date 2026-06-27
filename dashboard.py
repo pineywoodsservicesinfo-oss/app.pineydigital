@@ -1734,9 +1734,8 @@ def fieldpulse_dashboard():
         # Validate photo_url is HTTP/HTTPS only
         if photo_url.startswith(('http://', 'https://')):
             from markupsafe import escape
-            from modules.storage import get_presigned_url
-            # Use presigned URL for private bucket access
-            safe_url = escape(get_presigned_url(photo_url))
+            # Use backend proxy endpoint to serve photos from private S3 bucket
+            safe_url = escape(f"/api/profile-photo/{user_id}")
             avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
         else:
             avatar_html = user_name[:1].upper()
@@ -2631,6 +2630,47 @@ def clerk_webhook():
                 logger.error(f"Failed to update last_login: {e}")
 
     return jsonify({"status": "ok"})
+
+
+# ═════════════════════════════════════════════════════════════════
+# PROFILE PHOTO API (proxy for private S3 bucket)
+# ═════════════════════════════════════════════════════════════════
+
+@app.route("/api/profile-photo/<user_id>")
+def api_profile_photo(user_id):
+    """Proxy profile photos from private S3 bucket.
+
+    Returns the user's profile photo with proper content-type.
+    Falls back to initials if no photo exists.
+    """
+    try:
+        # Get user's photo URL from database
+        user = query_db(
+            "SELECT photo_url FROM users WHERE id = %s",
+            (user_id,), one=True
+        )
+
+        photo_url = user.get('photo_url', '') if user else ''
+
+        if not photo_url:
+            return "", 404
+
+        # Get the file from S3
+        from modules.storage import get_file
+        content, content_type = get_file(photo_url)
+
+        if content:
+            from flask import make_response
+            response = make_response(content)
+            response.headers['Content-Type'] = content_type or 'image/jpeg'
+            response.headers['Cache-Control'] = 'private, max-age=3600'
+            return response
+        else:
+            return "", 404
+
+    except Exception as e:
+        logger.error(f"Error serving profile photo for user {user_id}: {e}")
+        return "", 404
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -3819,9 +3859,8 @@ def fieldpulse_job_detail(job_id):
         # Validate photo_url is HTTP/HTTPS only
         if photo_url.startswith(('http://', 'https://')):
             from markupsafe import escape
-            from modules.storage import get_presigned_url
-            # Use presigned URL for private bucket access
-            safe_url = escape(get_presigned_url(photo_url))
+            # Use backend proxy endpoint to serve photos from private S3 bucket
+            safe_url = escape(f"/api/profile-photo/{user_id}")
             avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
         else:
             avatar_html = user_name[:1].upper()
@@ -4423,9 +4462,8 @@ def fieldpulse_crews():
         # Validate photo_url is HTTP/HTTPS only
         if photo_url.startswith(('http://', 'https://')):
             from markupsafe import escape
-            from modules.storage import get_presigned_url
-            # Use presigned URL for private bucket access
-            safe_url = escape(get_presigned_url(photo_url))
+            # Use backend proxy endpoint to serve photos from private S3 bucket
+            safe_url = escape(f"/api/profile-photo/{user_id}")
             avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
         else:
             avatar_html = user_name[:1].upper()
@@ -4623,9 +4661,8 @@ def fieldpulse_crew_new():
         # Validate photo_url is HTTP/HTTPS only
         if photo_url.startswith(('http://', 'https://')):
             from markupsafe import escape
-            from modules.storage import get_presigned_url
-            # Use presigned URL for private bucket access
-            safe_url = escape(get_presigned_url(photo_url))
+            # Use backend proxy endpoint to serve photos from private S3 bucket
+            safe_url = escape(f"/api/profile-photo/{user_id}")
             avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
         else:
             avatar_html = user_name[:1].upper()
@@ -4830,9 +4867,8 @@ def fieldpulse_crew_edit(crew_id):
         # Validate photo_url is HTTP/HTTPS only
         if photo_url.startswith(('http://', 'https://')):
             from markupsafe import escape
-            from modules.storage import get_presigned_url
-            # Use presigned URL for private bucket access
-            safe_url = escape(get_presigned_url(photo_url))
+            # Use backend proxy endpoint to serve photos from private S3 bucket
+            safe_url = escape(f"/api/profile-photo/{user_id}")
             avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
         else:
             avatar_html = user_name[:1].upper()
