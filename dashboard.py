@@ -2353,62 +2353,113 @@ def fieldpulse_profile():
                     </form>
                 </div>
 
-                <!-- Profile Info Section -->
+                <!-- Profile Info Section - Combined Personal & Business -->
                 <div class="bg-slate-800 rounded-xl border border-slate-700 p-6 mb-6">
-                    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <h3 class="text-lg font-semibold mb-6 flex items-center gap-2">
                         <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
                         </svg>
-                        Personal Information
+                        Account Settings
                     </h3>
 
-                    <form method="POST" class="space-y-4">
-                        <input type="hidden" name="action" value="update_profile">
+                    <!-- Personal Information Subsection -->
+                    <div class="mb-8">
+                        <h4 class="text-md font-medium text-slate-300 mb-4 pb-2 border-b border-slate-700">Personal Information</h4>
 
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <form method="POST" class="space-y-4">
+                            <input type="hidden" name="action" value="update_profile">
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">Full Name *</label>
+                                    <input type="text" name="name" value="{escape(user.get('name', ''))}" required
+                                        class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                        placeholder="Your full name">
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">Email Address *</label>
+                                    <input type="email" name="email" value="{escape(user.get('email', ''))}" required
+                                        class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                        placeholder="you@example.com">
+                                </div>
+                            </div>
+
                             <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Full Name *</label>
-                                <input type="text" name="name" value="{escape(user.get('name', ''))}" required
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Phone Number</label>
+                                <input type="tel" name="phone" value="{escape(user.get('phone', '') or '')}"
                                     class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                    placeholder="Your full name">
+                                    placeholder="(555) 123-4567">
+                            </div>
+
+                            <div class="pt-4 border-t border-slate-700">
+                                <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition">
+                                    Save Personal Info
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Business Information Subsection -->
+                    <div>
+                        <h4 class="text-md font-medium text-slate-300 mb-4 pb-2 border-b border-slate-700">Business Information</h4>
+
+                        <form method="POST" class="space-y-4">
+                            <input type="hidden" name="action" value="update_business">
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">Business Name *</label>
+                                    <input type="text" name="business_name" value="{escape(business.get('name', ''))}" required
+                                        class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                        placeholder="Your business name">
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">Business Phone</label>
+                                    <input type="tel" name="business_phone" value="{escape(business.get('phone') or '')}"
+                                        class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                        placeholder="(555) 123-4567">
+                                </div>
                             </div>
 
                             <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Email Address *</label>
-                                <input type="email" name="email" value="{escape(user.get('email', ''))}" required
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Business Address</label>
+                                <input type="text" name="business_address" value="{escape(business.get('address') or '')}"
                                     class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                    placeholder="you@example.com">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-slate-300 mb-2">Phone Number</label>
-                            <input type="tel" name="phone" value="{escape(user.get('phone', '') or '')}"
-                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                placeholder="(555) 123-4567">
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Role</label>
-                                <input type="text" value="{escape(user.get('role', 'Owner'))}" disabled
-                                    class="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-lg text-slate-400 cursor-not-allowed">
-                                <p class="text-xs text-slate-500 mt-1">Role can only be changed by an administrator</p>
+                                    placeholder="123 Main Street">
                             </div>
 
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Business</label>
-                                <input type="text" value="{escape(business.get('name', ''))}" disabled
-                                    class="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-lg text-slate-400 cursor-not-allowed">
-                            </div>
-                        </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">City</label>
+                                    <input type="text" name="business_city" value="{escape(business.get('city') or '')}"
+                                        class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                        placeholder="New York">
+                                </div>
 
-                        <div class="pt-4 border-t border-slate-700">
-                            <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition">
-                                Save Changes
-                            </button>
-                        </div>
-                    </form>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">Timezone</label>
+                                    <select name="business_timezone"
+                                        class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                        <option value="America/New_York" {{ 'selected' if business.get('timezone') == 'America/New_York' else '' }}>Eastern Time</option>
+                                        <option value="America/Chicago" {{ 'selected' if business.get('timezone') == 'America/Chicago' else '' }}>Central Time</option>
+                                        <option value="America/Denver" {{ 'selected' if business.get('timezone') == 'America/Denver' else '' }}>Mountain Time</option>
+                                        <option value="America/Los_Angeles" {{ 'selected' if business.get('timezone') == 'America/Los_Angeles' else '' }}>Pacific Time</option>
+                                        <option value="America/Phoenix" {{ 'selected' if business.get('timezone') == 'America/Phoenix' else '' }}>Arizona Time</option>
+                                        <option value="America/Anchorage" {{ 'selected' if business.get('timezone') == 'America/Anchorage' else '' }}>Alaska Time</option>
+                                        <option value="Pacific/Honolulu" {{ 'selected' if business.get('timezone') == 'Pacific/Honolulu' else '' }}>Hawaii Time</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="pt-4 border-t border-slate-700">
+                                <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition">
+                                    Save Business Info
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
 
                 <!-- Change Password Section (Legacy auth only) -->
@@ -2450,72 +2501,6 @@ def fieldpulse_profile():
                             <span class="text-slate-300">{user.get('clerk_user_id') and 'Clerk' or 'Legacy'}</span>
                         </div>
                     </div>
-                </div>
-
-                <!-- Business Settings Section -->
-                <div class="bg-slate-800 rounded-xl border border-slate-700 p-6 mb-6">
-                    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-                        <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
-                        </svg>
-                        Business Settings
-                    </h3>
-
-                    <form method="POST" class="space-y-4">
-                        <input type="hidden" name="action" value="update_business">
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Business Name *</label>
-                                <input type="text" name="business_name" value="{escape(business.get('name', ''))}" required
-                                    class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                    placeholder="Your business name">
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Business Phone</label>
-                                <input type="tel" name="business_phone" value="{escape(business.get('phone') or '')}"
-                                    class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                    placeholder="(555) 123-4567">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-slate-300 mb-2">Business Address</label>
-                            <input type="text" name="business_address" value="{escape(business.get('address') or '')}"
-                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                placeholder="123 Main Street">
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">City</label>
-                                <input type="text" name="business_city" value="{escape(business.get('city') or '')}"
-                                    class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                    placeholder="New York">
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-2">Timezone</label>
-                                <select name="business_timezone"
-                                    class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
-                                    <option value="America/New_York" {{ 'selected' if business.get('timezone') == 'America/New_York' else '' }}>Eastern Time</option>
-                                    <option value="America/Chicago" {{ 'selected' if business.get('timezone') == 'America/Chicago' else '' }}>Central Time</option>
-                                    <option value="America/Denver" {{ 'selected' if business.get('timezone') == 'America/Denver' else '' }}>Mountain Time</option>
-                                    <option value="America/Los_Angeles" {{ 'selected' if business.get('timezone') == 'America/Los_Angeles' else '' }}>Pacific Time</option>
-                                    <option value="America/Phoenix" {{ 'selected' if business.get('timezone') == 'America/Phoenix' else '' }}>Arizona Time</option>
-                                    <option value="America/Anchorage" {{ 'selected' if business.get('timezone') == 'America/Anchorage' else '' }}>Alaska Time</option>
-                                    <option value="Pacific/Honolulu" {{ 'selected' if business.get('timezone') == 'Pacific/Honolulu' else '' }}>Hawaii Time</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="pt-4 border-t border-slate-700">
-                            <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition">
-                                Save Business Settings
-                            </button>
-                        </div>
-                    </form>
                 </div>
 
                 <!-- Account Deletion Section -->
