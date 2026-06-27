@@ -1734,7 +1734,9 @@ def fieldpulse_dashboard():
         # Validate photo_url is HTTP/HTTPS only
         if photo_url.startswith(('http://', 'https://')):
             from markupsafe import escape
-            safe_url = escape(photo_url)
+            from modules.storage import get_presigned_url
+            # Use presigned URL for private bucket access
+            safe_url = escape(get_presigned_url(photo_url))
             avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
         else:
             avatar_html = user_name[:1].upper()
@@ -3817,7 +3819,9 @@ def fieldpulse_job_detail(job_id):
         # Validate photo_url is HTTP/HTTPS only
         if photo_url.startswith(('http://', 'https://')):
             from markupsafe import escape
-            safe_url = escape(photo_url)
+            from modules.storage import get_presigned_url
+            # Use presigned URL for private bucket access
+            safe_url = escape(get_presigned_url(photo_url))
             avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
         else:
             avatar_html = user_name[:1].upper()
@@ -4419,7 +4423,9 @@ def fieldpulse_crews():
         # Validate photo_url is HTTP/HTTPS only
         if photo_url.startswith(('http://', 'https://')):
             from markupsafe import escape
-            safe_url = escape(photo_url)
+            from modules.storage import get_presigned_url
+            # Use presigned URL for private bucket access
+            safe_url = escape(get_presigned_url(photo_url))
             avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
         else:
             avatar_html = user_name[:1].upper()
@@ -4617,7 +4623,9 @@ def fieldpulse_crew_new():
         # Validate photo_url is HTTP/HTTPS only
         if photo_url.startswith(('http://', 'https://')):
             from markupsafe import escape
-            safe_url = escape(photo_url)
+            from modules.storage import get_presigned_url
+            # Use presigned URL for private bucket access
+            safe_url = escape(get_presigned_url(photo_url))
             avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
         else:
             avatar_html = user_name[:1].upper()
@@ -4822,7 +4830,9 @@ def fieldpulse_crew_edit(crew_id):
         # Validate photo_url is HTTP/HTTPS only
         if photo_url.startswith(('http://', 'https://')):
             from markupsafe import escape
-            safe_url = escape(photo_url)
+            from modules.storage import get_presigned_url
+            # Use presigned URL for private bucket access
+            safe_url = escape(get_presigned_url(photo_url))
             avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
         else:
             avatar_html = user_name[:1].upper()
