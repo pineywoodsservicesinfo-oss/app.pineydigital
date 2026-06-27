@@ -57,16 +57,12 @@ def upload_file(file_data, filename, content_type='application/octet-stream', fo
     unique_name = f"{folder}/{uuid.uuid4().hex[:16]}.{file_ext}" if file_ext else f"{folder}/{uuid.uuid4().hex[:16]}"
 
     try:
-        # Ensure bucket policy allows public access
-        ensure_bucket_public()
-
-        # Upload with public-read ACL
+        # Upload file (Tigris objects are public by default, no ACL needed)
         s3.put_object(
             Bucket=S3_BUCKET_NAME,
             Key=unique_name,
             Body=file_data,
-            ContentType=content_type,
-            ACL='public-read'
+            ContentType=content_type
         )
 
         # Construct public URL
