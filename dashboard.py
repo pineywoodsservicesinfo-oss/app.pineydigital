@@ -2135,6 +2135,44 @@ def fieldpulse_profile():
             else:
                 error = "No photo provided"
 
+        elif action == "update_business":
+            business_name = request.form.get("business_name", "").strip()
+            business_phone = request.form.get("business_phone", "").strip()
+            business_address = request.form.get("business_address", "").strip()
+            business_city = request.form.get("business_city", "").strip()
+            business_timezone = request.form.get("business_timezone", "America/Chicago").strip()
+
+            if not business_name:
+                error = "Business name is required"
+            else:
+                query_db("""
+                    UPDATE businesses
+                    SET name = %s, phone = %s, address = %s, city = %s, timezone = %s, updated_at = NOW()
+                    WHERE id = %s
+                """, (business_name, business_phone or None, business_address or None, business_city or None, business_timezone, business_id))
+                success = "Business settings updated successfully"
+
+                # Refresh business data
+                business = query_db(
+                    "SELECT * FROM businesses WHERE id = %s",
+                    (business_id,),
+                    one=True
+                )
+
+        elif action == "delete_account":
+            try:
+                # Delete user account
+                query_db("DELETE FROM users WHERE id = %s", (user_id,))
+
+                # Clear session
+                session.clear()
+
+                # Redirect to landing page with deleted message
+                return redirect(url_for("landing") + "?deleted=true")
+            except Exception as e:
+                logger.error(f"Account deletion failed: {e}")
+                error = "Failed to delete account. Please try again."
+
     # Get profile photo URL
     photo_url = user.get('photo_url', '') if user else ''
     logger.info(f"Profile page - user_id: {user_id}, photo_url: {photo_url}")
@@ -2413,6 +2451,115 @@ def fieldpulse_profile():
                         </div>
                     </div>
                 </div>
+
+                <!-- Business Settings Section -->
+                <div class="bg-slate-800 rounded-xl border border-slate-700 p-6 mb-6">
+                    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                        </svg>
+                        Business Settings
+                    </h3>
+
+                    <form method="POST" class="space-y-4">
+                        <input type="hidden" name="action" value="update_business">
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Business Name *</label>
+                                <input type="text" name="business_name" value="{escape(business.get('name', ''))}" required
+                                    class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                    placeholder="Your business name">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Business Phone</label>
+                                <input type="tel" name="business_phone" value="{escape(business.get('phone') or '')}"
+                                    class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                    placeholder="(555) 123-4567">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Business Address</label>
+                            <input type="text" name="business_address" value="{escape(business.get('address') or '')}"
+                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                placeholder="123 Main Street">
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">City</label>
+                                <input type="text" name="business_city" value="{escape(business.get('city') or '')}"
+                                    class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                    placeholder="New York">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">Timezone</label>
+                                <select name="business_timezone"
+                                    class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                                    <option value="America/New_York" {selected if business.get('timezone') == 'America/New_York' else ''}>Eastern Time</option>
+                                    <option value="America/Chicago" {selected if business.get('timezone') == 'America/Chicago' else ''}>Central Time</option>
+                                    <option value="America/Denver" {selected if business.get('timezone') == 'America/Denver' else ''}>Mountain Time</option>
+                                    <option value="America/Los_Angeles" {selected if business.get('timezone') == 'America/Los_Angeles' else ''}>Pacific Time</option>
+                                    <option value="America/Phoenix" {selected if business.get('timezone') == 'America/Phoenix' else ''}>Arizona Time</option>
+                                    <option value="America/Anchorage" {selected if business.get('timezone') == 'America/Anchorage' else ''}>Alaska Time</option>
+                                    <option value="Pacific/Honolulu" {selected if business.get('timezone') == 'Pacific/Honolulu' else ''}>Hawaii Time</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="pt-4 border-t border-slate-700">
+                            <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-lg font-medium transition">
+                                Save Business Settings
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Account Deletion Section -->
+                <div class="bg-slate-800 rounded-xl border-2 border-red-500/30 p-6">
+                    <h3 class="text-lg font-semibold mb-2 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <span class="text-red-400">Danger Zone</span>
+                    </h3>
+                    <p class="text-sm text-slate-400 mb-4">
+                        Deleting your account will permanently remove your user account. Your business and its data will remain intact and can be accessed by other team members.
+                    </p>
+
+                    <form method="POST" id="delete-form" class="space-y-4">
+                        <input type="hidden" name="action" value="delete_account">
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">
+                                Type <span class="text-red-400 font-bold">DELETE</span> to confirm
+                            </label>
+                            <input type="text" id="delete_confirm" placeholder="DELETE"
+                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-red-500 focus:border-transparent font-mono">
+                        </div>
+
+                        <button type="submit" id="delete_btn" disabled
+                            class="bg-red-600 hover:bg-red-700 disabled:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-medium transition">
+                            Delete Account
+                        </button>
+                    </form>
+                </div>
+
+                <script>
+                document.getElementById('delete_confirm').addEventListener('input', function() {
+                    const btn = document.getElementById('delete_btn');
+                    if (this.value === 'DELETE') {
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    } else {
+                        btn.disabled = true;
+                        btn.classList.add('opacity-50', 'cursor-not-allowed');
+                    }
+                });
+                </script>
             </div>
         </main>
     </div>
