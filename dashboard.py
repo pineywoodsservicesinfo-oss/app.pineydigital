@@ -4603,15 +4603,18 @@ def fieldpulse_crews():
             </div>
 
             <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
-                <div class="flex items-center gap-3 px-4 py-2">
-                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium overflow-hidden">
+                <a href="/profile" class="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-slate-800 transition group">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-sm font-medium text-white overflow-hidden">
                         {avatar_html}
                     </div>
                     <div class="flex-1 min-w-0">
-                        <p class="text-sm font-medium text-white truncate">{user_name}</p>
-                        <a href="/logout" class="text-xs text-slate-500 hover:text-slate-400">Sign out</a>
+                        <p class="text-sm font-medium text-white truncate group-hover:text-emerald-400 transition">{user_name}</p>
+                        <p class="text-xs text-slate-500 truncate">{business.get('subscription_tier', 'Starter').title()} Plan</p>
                     </div>
-                </div>
+                    <svg class="w-4 h-4 text-slate-500 group-hover:text-white transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
             </div>
         </aside>
 
@@ -4779,15 +4782,18 @@ def fieldpulse_crew_new():
             </div>
 
             <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
-                <div class="flex items-center gap-3 px-4 py-2">
-                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium overflow-hidden">
+                <a href="/profile" class="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-slate-800 transition group">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-sm font-medium text-white overflow-hidden">
                         {avatar_html}
                     </div>
                     <div class="flex-1 min-w-0">
-                        <p class="text-sm font-medium text-white truncate">{user_name}</p>
-                        <a href="/logout" class="text-xs text-slate-500 hover:text-slate-400">Sign out</a>
+                        <p class="text-sm font-medium text-white truncate group-hover:text-emerald-400 transition">{user_name}</p>
+                        <p class="text-xs text-slate-500 truncate">{business.get('subscription_tier', 'Starter').title()} Plan</p>
                     </div>
-                </div>
+                    <svg class="w-4 h-4 text-slate-500 group-hover:text-white transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
             </div>
         </aside>
 
@@ -5005,15 +5011,18 @@ def fieldpulse_crew_edit(crew_id):
             </div>
 
             <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
-                <div class="flex items-center gap-3 px-4 py-2">
-                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-medium overflow-hidden">
+                <a href="/profile" class="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-slate-800 transition group">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-sm font-medium text-white overflow-hidden">
                         {avatar_html}
                     </div>
                     <div class="flex-1 min-w-0">
-                        <p class="text-sm font-medium text-white truncate">{user_name}</p>
-                        <a href="/logout" class="text-xs text-slate-500 hover:text-slate-400">Sign out</a>
+                        <p class="text-sm font-medium text-white truncate group-hover:text-emerald-400 transition">{user_name}</p>
+                        <p class="text-xs text-slate-500 truncate">{business.get('subscription_tier', 'Starter').title()} Plan</p>
                     </div>
-                </div>
+                    <svg class="w-4 h-4 text-slate-500 group-hover:text-white transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
             </div>
         </aside>
 
