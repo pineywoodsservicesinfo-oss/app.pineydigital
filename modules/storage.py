@@ -169,9 +169,11 @@ def get_presigned_url(file_url, expiration=3600):
 
     try:
         # Extract key from URL
-        prefix = f"{S3_ENDPOINT_URL}/{S3_BUCKET_NAME}/"
-        if file_url.startswith(prefix):
-            key = file_url[len(prefix):]
+        # URL format: https://bucket-name.t3.storageapi.dev/folder/file.jpg
+        url_without_https = file_url.replace('https://', '').replace('http://', '')
+        parts = url_without_https.split('/', 1)
+        if len(parts) > 1:
+            key = parts[1]
         else:
             key = file_url.split(f"/{S3_BUCKET_NAME}/")[-1]
 
@@ -204,9 +206,13 @@ def get_file(file_url):
 
     try:
         # Extract key from URL
-        prefix = f"{S3_ENDPOINT_URL}/{S3_BUCKET_NAME}/"
-        if file_url.startswith(prefix):
-            key = file_url[len(prefix):]
+        # URL format: https://bucket-name.t3.storageapi.dev/folder/file.jpg
+        # We need to extract just the "folder/file.jpg" part
+        url_without_https = file_url.replace('https://', '').replace('http://', '')
+        # Find the first slash after the endpoint/bucket prefix
+        parts = url_without_https.split('/', 1)
+        if len(parts) > 1:
+            key = parts[1]
         else:
             key = file_url.split(f"/{S3_BUCKET_NAME}/")[-1]
 
