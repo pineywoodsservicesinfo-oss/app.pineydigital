@@ -2139,9 +2139,11 @@ def fieldpulse_profile():
     photo_url = user.get('photo_url', '') if user else ''
     logger.info(f"Profile page - user_id: {user_id}, photo_url: {photo_url}")
 
-    # Build profile photo HTML
+    # Build profile photo HTML using proxy to handle private S3 bucket
     if photo_url:
-        avatar_html = f'<img src="{photo_url}" alt="Profile" class="w-full h-full object-cover">'
+        from markupsafe import escape
+        safe_url = escape(f"/api/profile-photo/{user_id}")
+        avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
     else:
         avatar_html = user_name[:1].upper()
 
@@ -3156,7 +3158,23 @@ def fieldpulse_jobs():
 
     business_id = business['id']
     user_name = session.get("fp_user_name", "User")
+    user_id = session.get("fp_user_id")
     status_filter = request.args.get("status", "")
+
+    # Get user's photo
+    user = query_db("SELECT photo_url FROM users WHERE id = %s", (user_id,), one=True)
+    photo_url = user.get('photo_url', '') if user else ''
+
+    # Build avatar HTML
+    if photo_url:
+        if photo_url.startswith(('http://', 'https://')):
+            from markupsafe import escape
+            safe_url = escape(f"/api/profile-photo/{user_id}")
+            avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
+        else:
+            avatar_html = user_name[:1].upper()
+    else:
+        avatar_html = user_name[:1].upper()
 
     # Get jobs with optional status filter
     if status_filter:
@@ -3282,7 +3300,7 @@ def fieldpulse_jobs():
             <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
                 <a href="/profile" class="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-slate-800 transition group">
                     <div class="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-sm font-medium text-white overflow-hidden">
-                        {user_name[:1].upper()}
+                        {avatar_html}
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-white truncate group-hover:text-emerald-400 transition">{user_name}</p>
