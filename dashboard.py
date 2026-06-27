@@ -2499,13 +2499,13 @@ def fieldpulse_profile():
                                 <label class="block text-sm font-medium text-slate-300 mb-2">Timezone</label>
                                 <select name="business_timezone"
                                     class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
-                                    <option value="America/New_York" {selected if business.get('timezone') == 'America/New_York' else ''}>Eastern Time</option>
-                                    <option value="America/Chicago" {selected if business.get('timezone') == 'America/Chicago' else ''}>Central Time</option>
-                                    <option value="America/Denver" {selected if business.get('timezone') == 'America/Denver' else ''}>Mountain Time</option>
-                                    <option value="America/Los_Angeles" {selected if business.get('timezone') == 'America/Los_Angeles' else ''}>Pacific Time</option>
-                                    <option value="America/Phoenix" {selected if business.get('timezone') == 'America/Phoenix' else ''}>Arizona Time</option>
-                                    <option value="America/Anchorage" {selected if business.get('timezone') == 'America/Anchorage' else ''}>Alaska Time</option>
-                                    <option value="Pacific/Honolulu" {selected if business.get('timezone') == 'Pacific/Honolulu' else ''}>Hawaii Time</option>
+                                    <option value="America/New_York" {{ 'selected' if business.get('timezone') == 'America/New_York' else '' }}>Eastern Time</option>
+                                    <option value="America/Chicago" {{ 'selected' if business.get('timezone') == 'America/Chicago' else '' }}>Central Time</option>
+                                    <option value="America/Denver" {{ 'selected' if business.get('timezone') == 'America/Denver' else '' }}>Mountain Time</option>
+                                    <option value="America/Los_Angeles" {{ 'selected' if business.get('timezone') == 'America/Los_Angeles' else '' }}>Pacific Time</option>
+                                    <option value="America/Phoenix" {{ 'selected' if business.get('timezone') == 'America/Phoenix' else '' }}>Arizona Time</option>
+                                    <option value="America/Anchorage" {{ 'selected' if business.get('timezone') == 'America/Anchorage' else '' }}>Alaska Time</option>
+                                    <option value="Pacific/Honolulu" {{ 'selected' if business.get('timezone') == 'Pacific/Honolulu' else '' }}>Hawaii Time</option>
                                 </select>
                             </div>
                         </div>
@@ -2549,16 +2549,16 @@ def fieldpulse_profile():
                 </div>
 
                 <script>
-                document.getElementById('delete_confirm').addEventListener('input', function() {
+                document.getElementById('delete_confirm').addEventListener('input', function() {{
                     const btn = document.getElementById('delete_btn');
-                    if (this.value === 'DELETE') {
+                    if (this.value === 'DELETE') {{
                         btn.disabled = false;
                         btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                    } else {
+                    }} else {{
                         btn.disabled = true;
                         btn.classList.add('opacity-50', 'cursor-not-allowed');
-                    }
-                });
+                    }}
+                }});
                 </script>
             </div>
         </main>
