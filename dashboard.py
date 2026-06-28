@@ -4622,7 +4622,8 @@ def fieldpulse_crews():
 
     # Get all crews for this business with their next scheduled job
     crews = query_db(
-        """SELECT c.*,
+        """SELECT c.id, c.business_id, c.name, c.role, c.email, c.phone, c.color, c.active, c.created_at,
+               c.skills, c.availability_start, c.availability_end, c.work_days,
                (SELECT COUNT(*) FROM jobs WHERE crew_id = c.id AND status IN ('scheduled', 'in_progress')) as active_jobs,
                (SELECT j.id FROM jobs j
                 WHERE j.crew_id = c.id
@@ -4923,12 +4924,21 @@ def fieldpulse_crew_new():
             error = "Crew name is required"
         else:
             crew_id = str(uuid.uuid4())
-            query_db("""
-                INSERT INTO crews (id, business_id, name, role, email, phone, color, active, created_at,
-                                   skills, availability_start, availability_end, work_days)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, true, NOW(), %s, %s, %s, %s)
-            """, (crew_id, business_id, name, role or None, email or None, phone or None, color,
-                  skills or None, availability_start, availability_end, work_days))
+            # Try with new columns first, fall back to basic columns if they don't exist
+            try:
+                query_db("""
+                    INSERT INTO crews (id, business_id, name, role, email, phone, color, active, created_at,
+                                       skills, availability_start, availability_end, work_days)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, true, NOW(), %s, %s, %s, %s)
+                """, (crew_id, business_id, name, role or None, email or None, phone or None, color,
+                      skills or None, availability_start, availability_end, work_days))
+            except Exception as e:
+                # Fall back to basic insert if new columns don't exist
+                logger.warning(f"Crew insert with new columns failed, trying basic: {e}")
+                query_db("""
+                    INSERT INTO crews (id, business_id, name, role, email, phone, color, active, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, true, NOW())
+                """, (crew_id, business_id, name, role or None, email or None, phone or None, color))
 
             invalidate_cache(f"crews:{business_id}")
             return redirect("/crews")
@@ -5217,12 +5227,20 @@ def fieldpulse_crew_edit(crew_id):
         if not name:
             error = "Crew name is required"
         else:
-            query_db("""
-                UPDATE crews SET name = %s, role = %s, email = %s, phone = %s, color = %s,
-                                 skills = %s, availability_start = %s, availability_end = %s, work_days = %s
-                WHERE id = %s AND business_id = %s
-            """, (name, role or None, email or None, phone or None, color,
-                  skills or None, availability_start, availability_end, work_days, crew_id, business_id))
+            # Try update with new columns first, fall back to basic if they don't exist
+            try:
+                query_db("""
+                    UPDATE crews SET name = %s, role = %s, email = %s, phone = %s, color = %s,
+                                     skills = %s, availability_start = %s, availability_end = %s, work_days = %s
+                    WHERE id = %s AND business_id = %s
+                """, (name, role or None, email or None, phone or None, color,
+                      skills or None, availability_start, availability_end, work_days, crew_id, business_id))
+            except Exception as e:
+                logger.warning(f"Crew update with new columns failed, trying basic: {e}")
+                query_db("""
+                    UPDATE crews SET name = %s, role = %s, email = %s, phone = %s, color = %s
+                    WHERE id = %s AND business_id = %s
+                """, (name, role or None, email or None, phone or None, color, crew_id, business_id))
 
             invalidate_cache(f"crews:{business_id}")
             return redirect("/crews")
