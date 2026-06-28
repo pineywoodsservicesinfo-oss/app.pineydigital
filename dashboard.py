@@ -3351,6 +3351,31 @@ def fieldpulse_jobs():
     else:
         avatar_html = user_name[:1].upper()
 
+    # Get services (renamed from templates) for quick job creation
+    services = query_db(
+        "SELECT * FROM job_templates WHERE business_id = %s ORDER BY name",
+        (business_id,)
+    )
+    services_json = json.dumps([{
+        "id": s["id"],
+        "name": s["name"],
+        "title": s["title"],
+        "description": s["description"] or "",
+        "estimated_duration": s["estimated_duration"],
+        "crew_id": str(s["crew_id"]) if s["crew_id"] else ""
+    } for s in (services or [])])
+
+    # Get crews for dropdown
+    crews = query_db(
+        "SELECT id, name, color FROM crews WHERE business_id = %s AND active = true ORDER BY name",
+        (business_id,)
+    )
+    crews_json = json.dumps([{
+        "id": str(c["id"]),
+        "name": c["name"],
+        "color": c.get("color", "emerald")
+    } for c in (crews or [])])
+
     # Get jobs with optional status filter
     if status_filter:
         jobs = query_db(
@@ -3493,11 +3518,93 @@ def fieldpulse_jobs():
             <header class="bg-slate-900 border-b border-slate-800 px-8 py-4 sticky top-0 z-10">
                 <div class="flex items-center justify-between">
                     <h2 class="text-xl font-semibold">Jobs</h2>
-                    <a href="/jobs/new" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium transition">+ New Job</a>
+                    <a href="/jobs/new" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium transition">+ Add Job</a>
                 </div>
             </header>
 
             <div class="p-8">
+                <!-- Services Quick Add Section -->
+                <div id="servicesSection" class="mb-8 {( 'hidden' if not services else '' )}">
+                    <h3 class="text-lg font-medium text-white mb-4">Your Services</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3" id="serviceCards">
+                        {''.join(f'''<div class="service-card bg-slate-800 rounded-xl border border-slate-700 p-4 hover:border-emerald-500/50 cursor-pointer transition group" onclick="openQuickAdd('{s["id"]}')">
+                            <div class="flex items-center gap-3 mb-2">
+                                <div class="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h4 class="font-medium text-white group-hover:text-emerald-400 transition">{s["name"]}</h4>
+                                    <p class="text-xs text-slate-400">{s["estimated_duration"]} min</p>
+                                </div>
+                            </div>
+                            <p class="text-sm text-slate-400 line-clamp-2">{s["title"]}</p>
+                        </div>''' for s in (services or []))}
+                    </div>
+                </div>
+
+                <!-- Quick Add Modal -->
+                <div id="quickAddModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden">
+                    <div class="bg-slate-800 rounded-xl border border-slate-700 p-6 w-full max-w-md mx-4">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-lg font-semibold text-white">Quick Add: <span id="quickAddServiceName"></span></h3>
+                            <button onclick="closeQuickAdd()" class="text-slate-400 hover:text-white">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <form id="quickAddForm" onsubmit="submitQuickAdd(event)">
+                            <input type="hidden" id="quickAddServiceId" name="service_id">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">Customer Name *</label>
+                                    <input type="text" id="quickCustomerName" required class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">Phone</label>
+                                    <input type="tel" id="quickCustomerPhone" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">Address</label>
+                                    <input type="text" id="quickAddress" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">Assign Crew *</label>
+                                    <select id="quickCrewId" required class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500">
+                                        <option value="">Select crew...</option>
+                                        {''.join(f'<option value="{c["id"]}">{c["name"]}</option>' for c in (crews or []))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">Date *</label>
+                                    <input type="date" id="quickDate" required class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500" style="color-scheme: dark;">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-300 mb-2">Time</label>
+                                    <select id="quickTime" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500">
+                                        <option value="08:00">8:00 AM</option>
+                                        <option value="09:00" selected>9:00 AM</option>
+                                        <option value="10:00">10:00 AM</option>
+                                        <option value="11:00">11:00 AM</option>
+                                        <option value="12:00">12:00 PM</option>
+                                        <option value="13:00">1:00 PM</option>
+                                        <option value="14:00">2:00 PM</option>
+                                        <option value="15:00">3:00 PM</option>
+                                        <option value="16:00">4:00 PM</option>
+                                        <option value="17:00">5:00 PM</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="flex gap-3 mt-6">
+                                <button type="button" onclick="closeQuickAdd()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white px-4 py-3 rounded-lg font-medium transition">Cancel</button>
+                                <button type="submit" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-3 rounded-lg font-medium transition">Create Job</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
                 <!-- Filters -->
                 <div class="mb-6 flex gap-2">
                     <a href="/jobs" class="px-4 py-2 rounded-lg text-sm font-medium {'bg-emerald-500 text-white' if not status_filter else 'bg-slate-800 text-slate-300 hover:text-white'}">All</a>
@@ -3526,6 +3633,69 @@ def fieldpulse_jobs():
             </div>
         </main>
     </div>
+
+    <script>
+        var servicesData = {services_json};
+        var crewsData = {crews_json};
+
+        function openQuickAdd(serviceId) {{
+            var service = servicesData.find(s => s.id === serviceId);
+            if (!service) return;
+
+            document.getElementById('quickAddServiceId').value = serviceId;
+            document.getElementById('quickAddServiceName').textContent = service.name;
+
+            // Set default date to today
+            var today = new Date().toISOString().split('T')[0];
+            document.getElementById('quickDate').value = today;
+
+            // Pre-fill crew if service has one
+            if (service.crew_id) {{
+                document.getElementById('quickCrewId').value = service.crew_id;
+            }}
+
+            document.getElementById('quickAddModal').classList.remove('hidden');
+        }}
+
+        function closeQuickAdd() {{
+            document.getElementById('quickAddModal').classList.add('hidden');
+            document.getElementById('quickAddForm').reset();
+        }}
+
+        function submitQuickAdd(e) {{
+            e.preventDefault();
+            var formData = {{
+                service_id: document.getElementById('quickAddServiceId').value,
+                customer_name: document.getElementById('quickCustomerName').value,
+                customer_phone: document.getElementById('quickCustomerPhone').value,
+                address: document.getElementById('quickAddress').value,
+                crew_id: document.getElementById('quickCrewId').value,
+                scheduled_date: document.getElementById('quickDate').value,
+                scheduled_time: document.getElementById('quickTime').value
+            }};
+
+            fetch('/api/jobs/quick-add', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify(formData)
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                if (data.success) {{
+                    closeQuickAdd();
+                    location.reload();
+                }} else {{
+                    alert('Error: ' + (data.error || 'Failed to create job'));
+                }}
+            }})
+            .catch(err => alert('Error: ' + err));
+        }}
+
+        // Close modal on escape key
+        document.addEventListener('keydown', function(e) {{
+            if (e.key === 'Escape') closeQuickAdd();
+        }});
+    </script>
 </body>
 </html>''')
 
@@ -3955,7 +4125,7 @@ def fieldpulse_new_job():
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
                                     </svg>
-                                    Save as Template
+                                    Save as Service
                                 </button>
                                 <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-8 py-3 rounded-lg font-medium transition flex items-center gap-2">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4203,6 +4373,68 @@ def delete_template(template_id):
     query_db("DELETE FROM job_templates WHERE id = %s AND business_id = %s",
              (template_id, business['id']))
     return jsonify({"success": True})
+
+
+# ═════════════════════════════════════════════════════════════════
+# QUICK JOB ADD API (Task #6 - Services)
+# ═════════════════════════════════════════════════════════════════
+
+@app.route("/api/jobs/quick-add", methods=["POST"])
+@fp_login_required
+def quick_add_job():
+    """Quick add a job from a service template."""
+    business = get_business_from_session()
+    if not business:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json()
+    service_id = data.get("service_id")
+    customer_name = data.get("customer_name", "").strip()
+    customer_phone = data.get("customer_phone", "").strip()
+    address = data.get("address", "").strip()
+    crew_id = data.get("crew_id")
+    scheduled_date = data.get("scheduled_date", "").strip()
+    scheduled_time = data.get("scheduled_time", "09:00").strip()
+
+    if not customer_name:
+        return jsonify({"error": "Customer name is required"}), 400
+    if not scheduled_date:
+        return jsonify({"error": "Scheduled date is required"}), 400
+    if not crew_id:
+        return jsonify({"error": "Crew is required"}), 400
+
+    # Get service template
+    service = query_db(
+        "SELECT * FROM job_templates WHERE id = %s AND business_id = %s",
+        (service_id, business['id']),
+        one=True
+    )
+    if not service:
+        return jsonify({"error": "Service not found"}), 404
+
+    # Create job
+    job_id = str(uuid.uuid4())
+    scheduled_datetime = f"{scheduled_date} {scheduled_time}:00"
+
+    query_db("""
+        INSERT INTO jobs (id, business_id, title, description, customer_name, customer_phone,
+                        address, city, scheduled_date, crew_id, status, estimated_duration_min)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'scheduled', %s)
+    """, (job_id, business['id'],
+          service['title'],
+          service['description'] or '',
+          customer_name,
+          customer_phone or None,
+          address or None,
+          service['city'] or None,
+          scheduled_datetime,
+          crew_id,
+          service['estimated_duration'] or 60))
+
+    invalidate_cache(f"jobs:{business['id']}")
+    invalidate_cache(f"crews:{business['id']}")
+
+    return jsonify({"success": True, "job_id": job_id})
 
 
 # Job Detail Route
