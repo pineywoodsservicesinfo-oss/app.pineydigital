@@ -4646,6 +4646,36 @@ def fieldpulse_crews():
     for crew in crews:
         color = crew.get("color", "emerald")
         active_jobs = crew.get("active_jobs", 0)
+
+        # Parse skills for display
+        skills_html = ""
+        skills = crew.get("skills", "")
+        if skills:
+            skill_colors = ["emerald", "blue", "purple", "amber", "rose", "cyan", "orange", "pink"]
+            for i, skill in enumerate([s.strip() for s in skills.split(",") if s.strip()]):
+                skill_color = skill_colors[i % len(skill_colors)]
+                skills_html += f'<span class="px-2 py-1 bg-{skill_color}-500/20 text-{skill_color}-400 text-xs rounded-full">{skill}</span>'
+
+        # Parse work days bitmask for display
+        work_days = crew.get("work_days", 62) or 62  # Default Mon-Fri
+        days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+        mask_values = [1, 2, 4, 8, 16, 32, 64]
+        working_days = [days[i] for i in range(7) if work_days & mask_values[i]]
+        days_display = '-'.join(working_days) if working_days else "Not available"
+
+        # Format availability times
+        avail_start = str(crew.get('availability_start', '08:00'))[:5]
+        avail_end = str(crew.get('availability_end', '18:00'))[:5]
+        # Convert to 12-hour format
+        def to_12h(t):
+            h, m = t.split(':')
+            h, m = int(h), int(m)
+            period = 'AM' if h < 12 else 'PM'
+            h = h % 12 or 12
+            return f'{h}:{m:02d} {period}'
+        avail_start_12 = to_12h(avail_start)
+        avail_end_12 = to_12h(avail_end)
+
         crew_cards += f'''
         <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden hover:border-slate-600 transition">
             <div class="p-6">
@@ -4668,9 +4698,16 @@ def fieldpulse_crews():
                         </a>
                     </div>
                 </div>
+                {f'<div class="flex flex-wrap gap-2 mb-3">{skills_html}</div>' if skills_html else ''}
                 <div class="space-y-2 text-sm">
                     {f'<div class="flex items-center gap-2 text-slate-400"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>{crew.get("email")}</div>' if crew.get("email") else ''}
                     {f'<div class="flex items-center gap-2 text-slate-400"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>{crew.get("phone")}</div>' if crew.get("phone") else ''}
+                    <div class="flex items-center gap-2 text-slate-400">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        {days_display} {avail_start_12} - {avail_end_12}
+                    </div>
                 </div>
             </div>
             <div class="px-6 py-3 bg-slate-900/50 border-t border-slate-700 flex items-center justify-between">
@@ -4840,16 +4877,26 @@ def fieldpulse_crew_new():
         role = request.form.get("role", "").strip()
         email = request.form.get("email", "").strip()
         phone = request.form.get("phone", "").strip()
+        skills = request.form.get("skills", "").strip()
         color = request.form.get("color", "emerald")
+        availability_start = request.form.get("availability_start", "08:00")
+        availability_end = request.form.get("availability_end", "18:00")
+
+        # Calculate work_days bitmask (Sun=1, Mon=2, Tue=4, Wed=8, Thu=16, Fri=32, Sat=64)
+        work_days = 0
+        for val in request.form.getlist("work_days"):
+            work_days += int(val)
 
         if not name:
             error = "Crew name is required"
         else:
             crew_id = str(uuid.uuid4())
             query_db("""
-                INSERT INTO crews (id, business_id, name, role, email, phone, color, active, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, true, NOW())
-            """, (crew_id, business_id, name, role or None, email or None, phone or None, color))
+                INSERT INTO crews (id, business_id, name, role, email, phone, color, active, created_at,
+                                   skills, availability_start, availability_end, work_days)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, true, NOW(), %s, %s, %s, %s)
+            """, (crew_id, business_id, name, role or None, email or None, phone or None, color,
+                  skills or None, availability_start, availability_end, work_days))
 
             invalidate_cache(f"crews:{business_id}")
             return redirect("/crews")
@@ -4982,6 +5029,62 @@ def fieldpulse_crew_new():
                     </div>
 
                     <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Skills / Tags</label>
+                        <input type="text" name="skills"
+                            class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                            placeholder="e.g., HVAC, Plumbing, Electrical (comma-separated)">
+                        <p class="text-xs text-slate-500 mt-1">Enter skills separated by commas</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Work Days</label>
+                        <div class="flex flex-wrap gap-2">
+                            <label class="flex items-center gap-2 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg cursor-pointer hover:border-emerald-500/50 has-checked:border-emerald-500 has-checked:bg-emerald-500/10">
+                                <input type="checkbox" name="work_days" value="1" class="sr-only peer">
+                                <span class="text-sm text-slate-300 peer-checked:text-emerald-400">Sun</span>
+                            </label>
+                            <label class="flex items-center gap-2 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg cursor-pointer hover:border-emerald-500/50 has-checked:border-emerald-500 has-checked:bg-emerald-500/10">
+                                <input type="checkbox" name="work_days" value="2" checked class="sr-only peer">
+                                <span class="text-sm text-slate-300 peer-checked:text-emerald-400">Mon</span>
+                            </label>
+                            <label class="flex items-center gap-2 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg cursor-pointer hover:border-emerald-500/50 has-checked:border-emerald-500 has-checked:bg-emerald-500/10">
+                                <input type="checkbox" name="work_days" value="4" checked class="sr-only peer">
+                                <span class="text-sm text-slate-300 peer-checked:text-emerald-400">Tue</span>
+                            </label>
+                            <label class="flex items-center gap-2 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg cursor-pointer hover:border-emerald-500/50 has-checked:border-emerald-500 has-checked:bg-emerald-500/10">
+                                <input type="checkbox" name="work_days" value="8" checked class="sr-only peer">
+                                <span class="text-sm text-slate-300 peer-checked:text-emerald-400">Wed</span>
+                            </label>
+                            <label class="flex items-center gap-2 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg cursor-pointer hover:border-emerald-500/50 has-checked:border-emerald-500 has-checked:bg-emerald-500/10">
+                                <input type="checkbox" name="work_days" value="16" checked class="sr-only peer">
+                                <span class="text-sm text-slate-300 peer-checked:text-emerald-400">Thu</span>
+                            </label>
+                            <label class="flex items-center gap-2 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg cursor-pointer hover:border-emerald-500/50 has-checked:border-emerald-500 has-checked:bg-emerald-500/10">
+                                <input type="checkbox" name="work_days" value="32" checked class="sr-only peer">
+                                <span class="text-sm text-slate-300 peer-checked:text-emerald-400">Fri</span>
+                            </label>
+                            <label class="flex items-center gap-2 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg cursor-pointer hover:border-emerald-500/50 has-checked:border-emerald-500 has-checked:bg-emerald-500/10">
+                                <input type="checkbox" name="work_days" value="64" class="sr-only peer">
+                                <span class="text-sm text-slate-300 peer-checked:text-emerald-400">Sat</span>
+                            </label>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">Select the days this crew works (default: Mon-Fri)</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Availability Start</label>
+                            <input type="time" name="availability_start" value="08:00"
+                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Availability End</label>
+                            <input type="time" name="availability_end" value="18:00"
+                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                        </div>
+                    </div>
+
+                    <div>
                         <label class="block text-sm font-medium text-slate-300 mb-2">Calendar Color</label>
                         <select name="color"
                             class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
@@ -5069,15 +5172,25 @@ def fieldpulse_crew_edit(crew_id):
         role = request.form.get("role", "").strip()
         email = request.form.get("email", "").strip()
         phone = request.form.get("phone", "").strip()
+        skills = request.form.get("skills", "").strip()
         color = request.form.get("color", "emerald")
+        availability_start = request.form.get("availability_start", "08:00")
+        availability_end = request.form.get("availability_end", "18:00")
+
+        # Calculate work_days bitmask (Sun=1, Mon=2, Tue=4, Wed=8, Thu=16, Fri=32, Sat=64)
+        work_days = 0
+        for val in request.form.getlist("work_days"):
+            work_days += int(val)
 
         if not name:
             error = "Crew name is required"
         else:
             query_db("""
-                UPDATE crews SET name = %s, role = %s, email = %s, phone = %s, color = %s
+                UPDATE crews SET name = %s, role = %s, email = %s, phone = %s, color = %s,
+                                 skills = %s, availability_start = %s, availability_end = %s, work_days = %s
                 WHERE id = %s AND business_id = %s
-            """, (name, role or None, email or None, phone or None, color, crew_id, business_id))
+            """, (name, role or None, email or None, phone or None, color,
+                  skills or None, availability_start, availability_end, work_days, crew_id, business_id))
 
             invalidate_cache(f"crews:{business_id}")
             return redirect("/crews")
@@ -5211,6 +5324,62 @@ def fieldpulse_crew_edit(crew_id):
                     </div>
 
                     <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Skills / Tags</label>
+                        <input type="text" name="skills" value="{crew.get('skills', '') or ''}"
+                            class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                            placeholder="e.g., HVAC, Plumbing, Electrical (comma-separated)">
+                        <p class="text-xs text-slate-500 mt-1">Enter skills separated by commas</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Work Days</label>
+                        <div class="flex flex-wrap gap-2" id="work_days_container">
+                            <label class="flex items-center gap-2 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg cursor-pointer hover:border-emerald-500/50 has-checked:border-emerald-500 has-checked:bg-emerald-500/10">
+                                <input type="checkbox" name="work_days" value="1" class="sr-only peer" data-mask="1">
+                                <span class="text-sm text-slate-300 peer-checked:text-emerald-400">Sun</span>
+                            </label>
+                            <label class="flex items-center gap-2 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg cursor-pointer hover:border-emerald-500/50 has-checked:border-emerald-500 has-checked:bg-emerald-500/10">
+                                <input type="checkbox" name="work_days" value="2" class="sr-only peer" data-mask="2">
+                                <span class="text-sm text-slate-300 peer-checked:text-emerald-400">Mon</span>
+                            </label>
+                            <label class="flex items-center gap-2 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg cursor-pointer hover:border-emerald-500/50 has-checked:border-emerald-500 has-checked:bg-emerald-500/10">
+                                <input type="checkbox" name="work_days" value="4" class="sr-only peer" data-mask="4">
+                                <span class="text-sm text-slate-300 peer-checked:text-emerald-400">Tue</span>
+                            </label>
+                            <label class="flex items-center gap-2 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg cursor-pointer hover:border-emerald-500/50 has-checked:border-emerald-500 has-checked:bg-emerald-500/10">
+                                <input type="checkbox" name="work_days" value="8" class="sr-only peer" data-mask="8">
+                                <span class="text-sm text-slate-300 peer-checked:text-emerald-400">Wed</span>
+                            </label>
+                            <label class="flex items-center gap-2 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg cursor-pointer hover:border-emerald-500/50 has-checked:border-emerald-500 has-checked:bg-emerald-500/10">
+                                <input type="checkbox" name="work_days" value="16" class="sr-only peer" data-mask="16">
+                                <span class="text-sm text-slate-300 peer-checked:text-emerald-400">Thu</span>
+                            </label>
+                            <label class="flex items-center gap-2 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg cursor-pointer hover:border-emerald-500/50 has-checked:border-emerald-500 has-checked:bg-emerald-500/10">
+                                <input type="checkbox" name="work_days" value="32" class="sr-only peer" data-mask="32">
+                                <span class="text-sm text-slate-300 peer-checked:text-emerald-400">Fri</span>
+                            </label>
+                            <label class="flex items-center gap-2 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg cursor-pointer hover:border-emerald-500/50 has-checked:border-emerald-500 has-checked:bg-emerald-500/10">
+                                <input type="checkbox" name="work_days" value="64" class="sr-only peer" data-mask="64">
+                                <span class="text-sm text-slate-300 peer-checked:text-emerald-400">Sat</span>
+                            </label>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">Select the days this crew works</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Availability Start</label>
+                            <input type="time" name="availability_start" value="{str(crew.get('availability_start', '08:00'))[:5]}"
+                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Availability End</label>
+                            <input type="time" name="availability_end" value="{str(crew.get('availability_end', '18:00'))[:5]}"
+                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                        </div>
+                    </div>
+
+                    <div>
                         <label class="block text-sm font-medium text-slate-300 mb-2">Calendar Color</label>
                         <select name="color"
                             class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
@@ -5234,6 +5403,20 @@ def fieldpulse_crew_edit(crew_id):
                         </div>
                     </div>
                 </form>
+                <script>
+                    // Initialize work_days checkboxes from bitmask value
+                    (function() {{
+                        const workDays = {crew.get('work_days', 62) or 0};
+                        const maskValues = {{1: false, 2: false, 4: false, 8: false, 16: false, 32: false, 64: false}};
+                        for (let mask = 1; mask <= 64; mask <<= 1) {{
+                            if (workDays & mask) maskValues[mask] = true;
+                        }}
+                        document.querySelectorAll('input[name="work_days"]').forEach(cb => {{
+                            const mask = parseInt(cb.value);
+                            if (maskValues[mask]) cb.checked = true;
+                        }});
+                    }})();
+                </script>
             </div>
         </main>
     </div>

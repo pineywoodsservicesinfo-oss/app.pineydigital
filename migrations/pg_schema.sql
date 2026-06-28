@@ -765,6 +765,12 @@ CREATE TABLE IF NOT EXISTS crews (
 
 CREATE INDEX idx_crews_business ON crews(business_id);
 
+-- Add crew availability and skills columns
+ALTER TABLE crews ADD COLUMN IF NOT EXISTS availability_start TIME DEFAULT '08:00';
+ALTER TABLE crews ADD COLUMN IF NOT EXISTS availability_end TIME DEFAULT '18:00';
+ALTER TABLE crews ADD COLUMN IF NOT EXISTS work_days INTEGER DEFAULT 62;  -- Mon-Fri by default (2+4+8+16+32)
+ALTER TABLE crews ADD COLUMN IF NOT EXISTS skills TEXT;
+
 -- ── VIEWS FOR COMMON QUERIES ─────────────────────────────────────────────
 
 -- Business dashboard stats
