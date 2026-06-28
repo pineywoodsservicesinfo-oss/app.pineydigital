@@ -3166,6 +3166,24 @@ def admin_migrate():
             except Exception as e:
                 return jsonify({"status": "error", "message": f"Crews migration failed: {str(e)}"}), 500
 
+            # Add crew availability and skills columns (Task #4 & #5)
+            try:
+                query_db("ALTER TABLE crews ADD COLUMN IF NOT EXISTS availability_start TIME DEFAULT '08:00'")
+            except Exception:
+                pass  # Column may already exist
+            try:
+                query_db("ALTER TABLE crews ADD COLUMN IF NOT EXISTS availability_end TIME DEFAULT '18:00'")
+            except Exception:
+                pass
+            try:
+                query_db("ALTER TABLE crews ADD COLUMN IF NOT EXISTS work_days INTEGER DEFAULT 62")
+            except Exception:
+                pass
+            try:
+                query_db("ALTER TABLE crews ADD COLUMN IF NOT EXISTS skills TEXT")
+            except Exception:
+                pass
+
             return jsonify({"status": "success", "message": "Migration completed successfully!"})
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)}), 500
@@ -3177,7 +3195,7 @@ def admin_migrate():
 
 <div style="background:#f3f4f6;padding:20px;border-radius:8px;margin-bottom:20px">
     <h3>Database Migration</h3>
-    <p>Creates: job_notes table, job_photos table, extends crews table (color, role, email, phone).</p>
+    <p>Creates: job_notes table, job_photos table, crews table, and adds availability/skills columns.</p>
     <form method="POST">
         <button type="submit" style="padding:10px 20px;background:#10b981;color:white;border:none;border-radius:6px;cursor:pointer">Run Migration</button>
     </form>
