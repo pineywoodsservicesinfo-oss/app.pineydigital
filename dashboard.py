@@ -4620,10 +4620,34 @@ def fieldpulse_crews():
     else:
         avatar_html = user_name[:1].upper()
 
-    # Get all crews for this business
+    # Get all crews for this business with their next scheduled job
     crews = query_db(
         """SELECT c.*,
-               (SELECT COUNT(*) FROM jobs WHERE crew_id = c.id AND status IN ('scheduled', 'in_progress')) as active_jobs
+               (SELECT COUNT(*) FROM jobs WHERE crew_id = c.id AND status IN ('scheduled', 'in_progress')) as active_jobs,
+               (SELECT j.id FROM jobs j
+                WHERE j.crew_id = c.id
+                  AND j.scheduled_date >= CURRENT_DATE
+                  AND j.status IN ('pending', 'scheduled')
+                ORDER BY j.scheduled_date ASC, j.scheduled_time ASC
+                LIMIT 1) as next_job_id,
+               (SELECT j.title FROM jobs j
+                WHERE j.crew_id = c.id
+                  AND j.scheduled_date >= CURRENT_DATE
+                  AND j.status IN ('pending', 'scheduled')
+                ORDER BY j.scheduled_date ASC, j.scheduled_time ASC
+                LIMIT 1) as next_job_title,
+               (SELECT j.scheduled_date FROM jobs j
+                WHERE j.crew_id = c.id
+                  AND j.scheduled_date >= CURRENT_DATE
+                  AND j.status IN ('pending', 'scheduled')
+                ORDER BY j.scheduled_date ASC, j.scheduled_time ASC
+                LIMIT 1) as next_job_date,
+               (SELECT j.scheduled_time FROM jobs j
+                WHERE j.crew_id = c.id
+                  AND j.scheduled_date >= CURRENT_DATE
+                  AND j.status IN ('pending', 'scheduled')
+                ORDER BY j.scheduled_date ASC, j.scheduled_time ASC
+                LIMIT 1) as next_job_time
            FROM crews c
            WHERE c.business_id = %s AND c.active = true
            ORDER BY c.name""",
@@ -4708,6 +4732,14 @@ def fieldpulse_crews():
                         </svg>
                         {days_display} {avail_start_12} - {avail_end_12}
                     </div>
+                    {f'''<div class="flex items-center gap-2 text-emerald-400">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                        Next: {crew.get("next_job_title", "No upcoming jobs")}
+                        {f' on {str(crew.get("next_job_date", ""))[:10]}' if crew.get("next_job_date") else ''}
+                        {f' at {str(crew.get("next_job_time", ""))[:5]}' if crew.get("next_job_time") else ''}
+                    </div>''' if crew.get("next_job_title") else '<div class="flex items-center gap-2 text-slate-500"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>No upcoming jobs</div>'}
                 </div>
             </div>
             <div class="px-6 py-3 bg-slate-900/50 border-t border-slate-700 flex items-center justify-between">
