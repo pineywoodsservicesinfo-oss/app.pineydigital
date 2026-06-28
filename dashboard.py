@@ -3185,6 +3185,30 @@ def admin_migrate():
             except Exception:
                 pass
 
+            # Add job_templates table (Task #6)
+            try:
+                query_db("""
+                    CREATE TABLE IF NOT EXISTS job_templates (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        business_id UUID REFERENCES businesses(id) ON DELETE CASCADE,
+                        name VARCHAR(255) NOT NULL,
+                        title VARCHAR(255) NOT NULL,
+                        description TEXT,
+                        customer_name VARCHAR(255),
+                        customer_phone VARCHAR(50),
+                        customer_email VARCHAR(255),
+                        address TEXT,
+                        city VARCHAR(100),
+                        estimated_duration INTEGER DEFAULT 60,
+                        crew_id UUID REFERENCES crews(id) ON DELETE SET NULL,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                    )
+                """)
+                query_db("CREATE INDEX IF NOT EXISTS idx_job_templates_business ON job_templates(business_id)")
+            except Exception:
+                pass
+
             return jsonify({"status": "success", "message": "Migration completed successfully!"})
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)}), 500
@@ -3523,6 +3547,25 @@ def fieldpulse_new_job():
     for crew in (crews or []):
         crew_options += f'<option value="{crew["id"]}">{crew.get("name", "Unnamed Crew")}</option>'
 
+    # Get templates for quick fill
+    templates = query_db(
+        "SELECT * FROM job_templates WHERE business_id = %s ORDER BY name",
+        (business_id,)
+    )
+    templates_json = json.dumps([{
+        "id": t["id"],
+        "name": t["name"],
+        "title": t["title"],
+        "description": t["description"] or "",
+        "customer_name": t["customer_name"] or "",
+        "customer_phone": t["customer_phone"] or "",
+        "customer_email": t["customer_email"] or "",
+        "address": t["address"] or "",
+        "city": t["city"] or "",
+        "estimated_duration": t["estimated_duration"],
+        "crew_id": str(t["crew_id"]) if t["crew_id"] else ""
+    } for t in (templates or [])])
+
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         customer_name = request.form.get("customer_name", "").strip()
@@ -3660,6 +3703,20 @@ def fieldpulse_new_job():
                                 <div>
                                     <h3 class="text-lg font-medium text-white">What type of job?</h3>
                                     <p class="text-sm text-slate-400">Select a service or enter custom title</p>
+                                </div>
+                            </div>
+
+                            <!-- Saved Templates -->
+                            <div id="templatesSection" class="mb-6 {( 'hidden' if not templates else '' )}">
+                                <div class="flex items-center justify-between mb-3">
+                                    <label class="text-sm font-medium text-slate-300">Saved Templates</label>
+                                    <button type="button" onclick="hideTemplates()" class="text-xs text-slate-500 hover:text-white">Hide</button>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2" id="templateButtons">
+                                    {''.join(f'''<button type="button" onclick="loadTemplate('{t["id"]}')" class="template-btn px-4 py-3 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded-lg transition text-left" data-template-id="{t["id"]}">
+                                        <div class="font-medium">{t["name"]}</div>
+                                        <div class="text-xs text-blue-400/70">{t["title"]}</div>
+                                    </button>''' for t in (templates or []))}
                                 </div>
                             </div>
 
@@ -3893,12 +3950,20 @@ def fieldpulse_new_job():
                                 </svg>
                                 Back
                             </button>
-                            <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-8 py-3 rounded-lg font-medium transition flex items-center gap-2">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                                </svg>
-                                Finish & Create Job
-                            </button>
+                            <div class="flex gap-3">
+                                <button type="button" onclick="saveAsTemplate()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition flex items-center gap-2">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+                                    </svg>
+                                    Save as Template
+                                </button>
+                                <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-white px-8 py-3 rounded-lg font-medium transition flex items-center gap-2">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                    </svg>
+                                    Finish & Create Job
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </form>
@@ -3993,6 +4058,77 @@ def fieldpulse_new_job():
                         }}, 300);
                     }}
 
+                    // Template data
+                    var templatesData = {templates_json};
+
+                    // Load template into form
+                    function loadTemplate(templateId) {{
+                        var template = templatesData.find(t => t.id === templateId);
+                        if (!template) return;
+
+                        document.getElementById('jobTitle').value = template.title || '';
+                        document.querySelector('textarea[name="description"]').value = template.description || '';
+                        document.getElementById('customerName').value = template.customer_name || '';
+                        document.querySelector('input[name="customer_phone"]').value = template.customer_phone || '';
+                        document.querySelector('input[name="customer_email"]').value = template.customer_email || '';
+                        document.querySelector('input[name="address"]').value = template.address || '';
+                        document.querySelector('input[name="city"]').value = template.city || '';
+                        document.querySelector('select[name="estimated_duration"]').value = template.estimated_duration || 60;
+                        if (template.crew_id) {{
+                            document.querySelector('select[name="crew_id"]').value = template.crew_id;
+                        }}
+
+                        // Highlight loaded template
+                        document.querySelectorAll('.template-btn').forEach(btn => {{
+                            btn.classList.remove('ring-2', 'ring-blue-400');
+                        }});
+                        var loadedBtn = document.querySelector(`button[data-template-id="${{templateId}}"]`);
+                        if (loadedBtn) {{
+                            loadedBtn.classList.add('ring-2', 'ring-blue-400');
+                        }}
+
+                        showToast('Template loaded!', 'success');
+                    }}
+
+                    // Hide templates section
+                    function hideTemplates() {{
+                        document.getElementById('templatesSection').classList.add('hidden');
+                    }}
+
+                    // Save as template
+                    function saveAsTemplate() {{
+                        var name = prompt('Enter a name for this template:');
+                        if (!name) return;
+
+                        var templateData = {{
+                            name: name,
+                            title: document.getElementById('jobTitle').value,
+                            description: document.querySelector('textarea[name="description"]').value,
+                            customer_name: document.getElementById('customerName').value,
+                            customer_phone: document.querySelector('input[name="customer_phone"]').value,
+                            customer_email: document.querySelector('input[name="customer_email"]').value,
+                            address: document.querySelector('input[name="address"]').value,
+                            city: document.querySelector('input[name="city"]').value,
+                            estimated_duration: document.querySelector('select[name="estimated_duration"]').value,
+                            crew_id: document.querySelector('select[name="crew_id"]').value
+                        }};
+
+                        fetch('/api/templates', {{
+                            method: 'POST',
+                            headers: {{ 'Content-Type': 'application/json' }},
+                            body: JSON.stringify(templateData)
+                        }})
+                        .then(r => r.json())
+                        .then(data => {{
+                            if (data.success) {{
+                                showToast('Template saved!', 'success');
+                            }} else {{
+                                showToast('Error saving template', 'error');
+                            }}
+                        }})
+                        .catch(() => showToast('Error saving template', 'error'));
+                    }}
+
                     // Initialize first step
                     showStep(1);
                 </script>
@@ -4001,6 +4137,72 @@ def fieldpulse_new_job():
     </div>
 </body>
 </html>''')
+
+
+# ═════════════════════════════════════════════════════════════════
+# JOB TEMPLATES API (Task #6)
+# ═════════════════════════════════════════════════════════════════
+
+@app.route("/api/templates", methods=["GET"])
+@fp_login_required
+def get_templates():
+    """Get all job templates for current business."""
+    business = get_business_from_session()
+    if not business:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    templates = query_db(
+        "SELECT * FROM job_templates WHERE business_id = %s ORDER BY name",
+        (business['id'],)
+    )
+    return jsonify({"templates": templates})
+
+
+@app.route("/api/templates", methods=["POST"])
+@fp_login_required
+def create_template():
+    """Save current job form as a template."""
+    business = get_business_from_session()
+    if not business:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json()
+    name = data.get("name", "").strip()
+    title = data.get("title", "").strip()
+
+    if not name or not title:
+        return jsonify({"error": "Template name and job title are required"}), 400
+
+    template_id = str(uuid.uuid4())
+    query_db("""
+        INSERT INTO job_templates (id, business_id, name, title, description, customer_name,
+                                  customer_phone, customer_email, address, city,
+                                  estimated_duration, crew_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """, (template_id, business['id'], name, title,
+          data.get("description", ""),
+          data.get("customer_name", ""),
+          data.get("customer_phone", ""),
+          data.get("customer_email", ""),
+          data.get("address", ""),
+          data.get("city", ""),
+          data.get("estimated_duration", 60),
+          data.get("crew_id") or None))
+
+    return jsonify({"success": True, "template_id": template_id})
+
+
+@app.route("/api/templates/<template_id>", methods=["DELETE"])
+@fp_login_required
+def delete_template(template_id):
+    """Delete a job template."""
+    business = get_business_from_session()
+    if not business:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    query_db("DELETE FROM job_templates WHERE id = %s AND business_id = %s",
+             (template_id, business['id']))
+    return jsonify({"success": True})
 
 
 # Job Detail Route
