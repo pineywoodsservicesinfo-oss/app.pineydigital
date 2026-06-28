@@ -1815,14 +1815,15 @@ def fieldpulse_dashboard():
     # Build crew cards
     crew_cards = ""
     for crew in (crews or []):
+        crew_color = crew.get('color', 'emerald')
         crew_cards += f"""
         <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 flex items-center gap-4">
-            <div class="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-semibold">
+            <div class="w-12 h-12 rounded-full bg-gradient-to-br from-{crew_color}-400 to-{crew_color}-600 flex items-center justify-center text-white font-semibold">
                 {crew.get('name', 'C')[:1]}
             </div>
             <div>
                 <h4 class="font-medium text-white">{crew.get('name', 'Unnamed Crew')}</h4>
-                <p class="text-sm text-slate-400">Active crew</p>
+                <p class="text-sm text-slate-400">{crew.get('role', 'Team Member')}</p>
             </div>
         </div>
         """
