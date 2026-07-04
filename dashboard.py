@@ -20,7 +20,7 @@ import json
 import uuid
 import sqlite3
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from functools import wraps
 from flask import (Flask, render_template_string, redirect,
@@ -2884,14 +2884,19 @@ def api_waitlist_signup():
 
         if existing:
             # If existing entry has an active demo pass, refresh session
-            if existing.get('demo_access_expires_at') and existing['demo_access_expires_at'] > datetime.now():
-                _grant_demo_session(email)
-                return jsonify({
-                    "success": True,
-                    "message": "Welcome back! Your demo access is active.",
-                    "already_exists": True,
-                    "demo_url": "/dashboard"
-                })
+            expires = existing.get('demo_access_expires_at')
+            if expires:
+                # expires is offset-aware (timestamptz); datetime.now() is naive.
+                # Compare against UTC to avoid TypeError.
+                now = datetime.now(expires.tzinfo) if expires.tzinfo else datetime.now(timezone.utc)
+                if expires > now:
+                    _grant_demo_session(email)
+                    return jsonify({
+                        "success": True,
+                        "message": "Welcome back! Your demo access is active.",
+                        "already_exists": True,
+                        "demo_url": "/dashboard"
+                    })
             return jsonify({
                 "success": True,
                 "message": "You're already on the waitlist!",
