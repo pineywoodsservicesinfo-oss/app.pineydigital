@@ -1856,6 +1856,24 @@ def fieldpulse_dashboard():
                             'fp_user_name', 'fp_is_demo', 'fp_demo_email']:
                     session.pop(key, None)
 
+    # Build demo banner HTML (Python-side conditional, not Jinja, because
+    # the dashboard template is itself a Python f-string)
+    demo_banner_html = ""
+    if is_demo_user:
+        demo_banner_html = f'''
+    <div class="bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-6 py-3 flex items-center justify-between shadow-lg" id="demo-banner">
+        <div class="flex items-center gap-3">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div>
+                <p class="font-semibold text-sm">You're exploring FieldPulse as a guest</p>
+                <p class="text-xs text-emerald-50">Demo access active for {demo_days_left} more days. <a href="/clerk-signup" class="underline font-medium">Sign up to keep your work</a> &middot; <a href="/api/exit-demo" class="underline">Exit demo</a></p>
+            </div>
+        </div>
+    </div>
+    '''
+
     return render_template_string(f"""<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -1866,19 +1884,7 @@ def fieldpulse_dashboard():
     {FIELD_PULSE_CSS}
 </head>
 <body class="bg-slate-900 text-white">
-    {{% if is_demo_user %}}
-    <div class="bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-6 py-3 flex items-center justify-between shadow-lg" id="demo-banner">
-        <div class="flex items-center gap-3">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-            <div>
-                <p class="font-semibold text-sm">You're exploring FieldPulse as a guest</p>
-                <p class="text-xs text-emerald-50">Demo access active for {{{{demo_days_left}}}} more days. <a href="/clerk-signup" class="underline font-medium">Sign up to keep your work</a> · <a href="/api/exit-demo" class="underline">Exit demo</a></p>
-            </div>
-        </div>
-    </div>
-    {{% endif %}}
+    {demo_banner_html}
     <div class="flex min-h-screen">
         <!-- Sidebar -->
         <aside class="w-64 bg-slate-950 border-r border-slate-800 fixed h-full">
