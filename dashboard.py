@@ -1740,7 +1740,6 @@ def fieldpulse_dashboard():
     if photo_url:
         # Validate photo_url is HTTP/HTTPS only
         if photo_url.startswith(('http://', 'https://')):
-            from markupsafe import escape
             # Use backend proxy endpoint to serve photos from private S3 bucket
             safe_url = escape(f"/api/profile-photo/{user_id}")
             avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
@@ -2222,7 +2221,6 @@ def fieldpulse_profile():
 
     # Build profile photo HTML using proxy to handle private S3 bucket
     if photo_url:
-        from markupsafe import escape
         safe_url = escape(f"/api/profile-photo/{user_id}")
         avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
     else:
@@ -3477,7 +3475,6 @@ def fieldpulse_jobs():
     # Build avatar HTML
     if photo_url:
         if photo_url.startswith(('http://', 'https://')):
-            from markupsafe import escape
             safe_url = escape(f"/api/profile-photo/{user_id}")
             avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
         else:
@@ -4595,7 +4592,6 @@ def fieldpulse_job_detail(job_id):
     if photo_url:
         # Validate photo_url is HTTP/HTTPS only
         if photo_url.startswith(('http://', 'https://')):
-            from markupsafe import escape
             # Use backend proxy endpoint to serve photos from private S3 bucket
             safe_url = escape(f"/api/profile-photo/{user_id}")
             avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
@@ -5198,7 +5194,6 @@ def fieldpulse_crews():
     if photo_url:
         # Validate photo_url is HTTP/HTTPS only
         if photo_url.startswith(('http://', 'https://')):
-            from markupsafe import escape
             # Use backend proxy endpoint to serve photos from private S3 bucket
             safe_url = escape(f"/api/profile-photo/{user_id}")
             avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
@@ -5470,7 +5465,6 @@ def fieldpulse_crew_new():
     if photo_url:
         # Validate photo_url is HTTP/HTTPS only
         if photo_url.startswith(('http://', 'https://')):
-            from markupsafe import escape
             # Use backend proxy endpoint to serve photos from private S3 bucket
             safe_url = escape(f"/api/profile-photo/{user_id}")
             avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
@@ -5754,7 +5748,6 @@ def fieldpulse_crew_edit(crew_id):
     if photo_url:
         # Validate photo_url is HTTP/HTTPS only
         if photo_url.startswith(('http://', 'https://')):
-            from markupsafe import escape
             # Use backend proxy endpoint to serve photos from private S3 bucket
             safe_url = escape(f"/api/profile-photo/{user_id}")
             avatar_html = f'<img src="{safe_url}" alt="Profile" class="w-full h-full object-cover">'
