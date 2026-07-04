@@ -1127,7 +1127,14 @@ LANDING_PAGE_TEMPLATE = """
                 const result = await response.json();
 
                 if (result.success) {{
-                    // Close modal and show confirmation
+                    // If the API granted demo access, redirect to the dashboard
+                    if (result.demo_url) {{
+                        closeWaitlistModal();
+                        window.location.href = result.demo_url;
+                        return;
+                    }}
+
+                    // Otherwise show inline confirmation
                     closeWaitlistModal();
                     document.getElementById('waitlist-confirmation').style.display = 'block';
 
@@ -1828,6 +1835,28 @@ def fieldpulse_dashboard():
         </div>
         """
 
+    # Demo pass state (set if user came in via waitlist signup)
+    is_demo_user = bool(session.get('fp_is_demo'))
+    demo_days_left = 0
+    if is_demo_user:
+        demo_email = session.get('fp_demo_email', '')
+        demo_entry = query_db(
+            "SELECT demo_access_expires_at FROM waitlist_entries WHERE email = %s",
+            (demo_email,), one=True
+        )
+        if demo_entry and demo_entry.get('demo_access_expires_at'):
+            expires = demo_entry['demo_access_expires_at']
+            now = datetime.now(expires.tzinfo) if expires.tzinfo else datetime.now()
+            seconds_left = int((expires - now).total_seconds())
+            if seconds_left > 0:
+                demo_days_left = max(1, seconds_left // 86400)
+            else:
+                is_demo_user = False
+                # Optionally clear the session
+                for key in ['fp_logged_in', 'fp_user_id', 'fp_business_id',
+                            'fp_user_name', 'fp_is_demo', 'fp_demo_email']:
+                    session.pop(key, None)
+
     return render_template_string(f"""<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -1838,6 +1867,19 @@ def fieldpulse_dashboard():
     {FIELD_PULSE_CSS}
 </head>
 <body class="bg-slate-900 text-white">
+    {{% if is_demo_user %}}
+    <div class="bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-6 py-3 flex items-center justify-between shadow-lg" id="demo-banner">
+        <div class="flex items-center gap-3">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div>
+                <p class="font-semibold text-sm">You're exploring FieldPulse as a guest</p>
+                <p class="text-xs text-emerald-50">Demo access active for {{{{demo_days_left}}}} more days. <a href="/clerk-signup" class="underline font-medium">Sign up to keep your work</a> · <a href="/api/exit-demo" class="underline">Exit demo</a></p>
+            </div>
+        </div>
+    </div>
+    {{% endif %}}
     <div class="flex min-h-screen">
         <!-- Sidebar -->
         <aside class="w-64 bg-slate-950 border-r border-slate-800 fixed h-full">
@@ -2814,7 +2856,7 @@ def api_profile_photo(user_id):
 
 @app.route("/api/waitlist", methods=["POST"])
 def api_waitlist_signup():
-    """Handle waitlist signup - save to DB and send emails."""
+    """Handle waitlist signup - save to DB, send emails, grant demo pass."""
     try:
         data = request.get_json() or {}
 
@@ -2832,11 +2874,20 @@ def api_waitlist_signup():
 
         # Check if already in waitlist
         existing = query_db(
-            "SELECT id, status FROM waitlist_entries WHERE email = %s",
+            "SELECT id, status, demo_access_expires_at FROM waitlist_entries WHERE email = %s",
             (email,), one=True
         )
 
         if existing:
+            # If existing entry has an active demo pass, refresh session
+            if existing.get('demo_access_expires_at') and existing['demo_access_expires_at'] > datetime.now():
+                _grant_demo_session(email)
+                return jsonify({
+                    "success": True,
+                    "message": "Welcome back! Your demo access is active.",
+                    "already_exists": True,
+                    "demo_url": "/dashboard"
+                })
             return jsonify({
                 "success": True,
                 "message": "You're already on the waitlist!",
@@ -2868,15 +2919,98 @@ def api_waitlist_signup():
         # Send notification to admin
         send_waitlist_notification_email(email, name, company_name, industry, company_size)
 
+        # Grant 7-day demo pass to the dashboard
+        _grant_demo_pass(waitlist_id, email)
+
         return jsonify({
             "success": True,
             "message": "Thanks for joining the waitlist!",
-            "waitlist_id": waitlist_id
+            "waitlist_id": waitlist_id,
+            "demo_url": "/dashboard"
         })
 
     except Exception as e:
         logger.error(f"Waitlist signup error: {e}")
         return jsonify({"error": "Something went wrong. Please try again."}), 500
+
+
+def _grant_demo_pass(waitlist_id, email):
+    """Grant 7-day read-only demo pass to the demo user account.
+
+    The prospect sees the dashboard as 'Demo Landscaping Co' — the pre-seeded
+    demo account. They get to look around but cannot create/edit data.
+    """
+    try:
+        expires_at = datetime.now() + timedelta(days=7)
+        query_db("""
+            UPDATE waitlist_entries
+            SET demo_access_granted = TRUE,
+                demo_access_expires_at = %s
+            WHERE id = %s
+        """, (expires_at, waitlist_id))
+        _grant_demo_session(email)
+        logger.info(f"Granted 7-day demo pass to {email}")
+    except Exception as e:
+        logger.error(f"Failed to grant demo pass to {email}: {e}")
+
+
+def _grant_demo_session(email):
+    """Set Flask session keys to the demo user account."""
+    try:
+        demo_user = query_db(
+            "SELECT * FROM users WHERE email = 'owner@demolandscaping.com'",
+            one=True
+        )
+        if demo_user:
+            session['fp_logged_in'] = True
+            session['fp_user_id'] = demo_user['id']
+            session['fp_business_id'] = demo_user['business_id']
+            session['fp_user_name'] = demo_user.get('name', 'Demo User')
+            session['fp_is_demo'] = True
+            session['fp_demo_email'] = email
+            session.permanent = True
+    except Exception as e:
+        logger.error(f"Failed to set demo session for {email}: {e}")
+
+
+@app.route("/api/demo-status")
+def api_demo_status():
+    """Return current demo access state for the session."""
+    if not session.get('fp_is_demo'):
+        return jsonify({"demo": False})
+
+    email = session.get('fp_demo_email', '')
+    entry = query_db(
+        "SELECT demo_access_expires_at FROM waitlist_entries WHERE email = %s",
+        (email,), one=True
+    )
+
+    if not entry or not entry.get('demo_access_expires_at'):
+        return jsonify({"demo": False})
+
+    expires = entry['demo_access_expires_at']
+    now = datetime.now(expires.tzinfo) if expires.tzinfo else datetime.now()
+    seconds_left = int((expires - now).total_seconds())
+
+    if seconds_left <= 0:
+        return jsonify({"demo": False, "expired": True})
+
+    days_left = max(1, seconds_left // 86400)
+    return jsonify({
+        "demo": True,
+        "email": email,
+        "days_left": days_left,
+        "expires_at": expires.isoformat()
+    })
+
+
+@app.route("/api/exit-demo")
+def api_exit_demo():
+    """Clear demo session and return to landing page."""
+    for key in ['fp_logged_in', 'fp_user_id', 'fp_business_id', 'fp_user_name',
+                'fp_is_demo', 'fp_demo_email']:
+        session.pop(key, None)
+    return redirect('/')
 
 
 def send_waitlist_confirmation_email(email: str, name: str = ""):
